@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
+import cv2
 import numpy as np
 from PIL import Image
 
@@ -11,15 +13,16 @@ from src.config import ImageConfig
 from src.preprocess import (
     check_blur,
     check_brightness,
+    preprocess_images,
     quality_check,
     quality_check_batch,
+    remove_background,
 )
 
 
 def _make_image(width: int = 400, height: int = 300) -> Path:
     """创建带纹理的测试图片（模拟真实照片）."""
     arr = np.random.randint(0, 256, (height, width, 3), dtype=np.uint8)
-    # 添加渐变模拟"物体"
     y, x = np.ogrid[:height, :width]
     cx, cy = width // 2, height // 2
     mask = ((x - cx) ** 2 + (y - cy) ** 2) < (min(width, height) // 3) ** 2
@@ -27,6 +30,15 @@ def _make_image(width: int = 400, height: int = 300) -> Path:
     img = Image.fromarray(arr)
     p = Path("/tmp/test_img.jpg")
     img.save(p)
+    return p
+
+
+def _make_blurry_image(width: int = 400, height: int = 300) -> Path:
+    """创建模糊图片 — 高斯模糊使 Laplacian 方差极低."""
+    arr = np.random.randint(0, 256, (height, width, 3), dtype=np.uint8)
+    blurred = cv2.GaussianBlur(arr, (51, 51), 20)
+    p = Path("/tmp/test_blurry.jpg")
+    cv2.imwrite(str(p), blurred)
     return p
 
 
@@ -84,3 +96,74 @@ def test_quality_check_unreadable() -> None:
     report = quality_check(Path("/nonexistent/img.jpg"), ImageConfig())
     assert not report.is_ok
     assert any("无法读取" in i for i in report.issues)
+
+
+def test_quality_check_blur_fail() -> None:
+    """模糊度过高应被拒绝."""
+    p = _make_blurry_image(800, 600)
+    cfg = ImageConfig(min_resolution=(512, 512))
+    report = quality_check(p, cfg)
+    assert not report.is_ok
+    assert any("模糊" in i for i in report.issues)
+
+
+def test_quality_check_underexposed() -> None:
+    """曝光不足应被检测."""
+    img = np.full((600, 800, 3), 5, dtype=np.uint8)
+    p = Path("/tmp/test_dark.jpg")
+    Image.fromarray(img).save(p)
+    cfg = ImageConfig(min_resolution=(512, 512), min_brightness=20.0)
+    report = quality_check(p, cfg)
+    assert not report.is_ok
+    assert any("曝光不足" in i for i in report.issues)
+
+
+def test_quality_check_overexposed() -> None:
+    """过曝应被检测."""
+    img = np.full((600, 800, 3), 250, dtype=np.uint8)
+    p = Path("/tmp/test_bright.jpg")
+    Image.fromarray(img).save(p)
+    cfg = ImageConfig(min_resolution=(512, 512), max_brightness=240.0)
+    report = quality_check(p, cfg)
+    assert not report.is_ok
+    assert any("过曝" in i for i in report.issues)
+
+
+def test_remove_background_basic() -> None:
+    """背景去除基本流程."""
+    p = _make_image(800, 600)
+    out = Path("/tmp/test_nobg.png")
+    result = remove_background(p, out)
+    assert result == out
+    assert out.exists()
+    assert out.suffix == ".png"
+
+
+def test_preprocess_images_basic(tmp_path: Path) -> None:
+    """完整预处理流水线."""
+    # 创建合格的测试图片
+    imgs = []
+    for i in range(2):
+        arr = np.random.randint(50, 200, (600, 800, 3), dtype=np.uint8)
+        p = tmp_path / f"img_{i}.jpg"
+        Image.fromarray(arr).save(p)
+        imgs.append(p)
+    cfg = ImageConfig(min_resolution=(512, 512))
+    results = preprocess_images(imgs, tmp_path / "work", cfg)
+    assert len(results) == 2
+    assert all(r.exists() for r in results)
+    assert all(r.suffix == ".png" for r in results)
+
+
+def test_preprocess_images_all_rejected(tmp_path: Path) -> None:
+    """全部不合格应抛异常."""
+    # 小图（分辨率过低）
+    arr = np.full((100, 100, 3), 128, dtype=np.uint8)
+    p = tmp_path / "tiny.jpg"
+    Image.fromarray(arr).save(p)
+    cfg = ImageConfig(min_resolution=(512, 512))
+    try:
+        preprocess_images([p], tmp_path / "work", cfg)
+        assert False, "应抛出异常"
+    except ValueError as e:
+        assert "质量不合格" in str(e)
