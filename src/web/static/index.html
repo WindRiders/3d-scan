@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Scan — 多角度图片 → 3D 打印</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div id="app">
+  <!-- 顶部栏 -->
+  <header id="toolbar">
+    <h1>3D Scan</h1>
+    <span class="phase-badge">Phase 1-3 Ready</span>
+    <div id="task-status">就绪</div>
+  </header>
+
+  <!-- 主布局 -->
+  <div id="main-layout">
+
+    <!-- 左侧面板: 上传 + 任务 -->
+    <aside id="left-panel">
+      <!-- 上传区 -->
+      <section class="panel-card" id="upload-section">
+        <h2>上传图片</h2>
+        <div id="drop-zone">
+          <p>拖拽图片到此处 或 点击选择</p>
+          <input type="file" id="file-input" multiple accept="image/*" hidden>
+          <span class="hint">支持 JPG/PNG, 建议 20-40 张</span>
+        </div>
+        <div id="preview-strip"></div>
+        <div id="upload-actions" style="display:none">
+          <span id="file-count">0 张</span>
+          <button id="btn-upload" class="btn btn-primary">开始重建</button>
+        </div>
+      </section>
+
+      <!-- 任务列表 -->
+      <section class="panel-card" id="task-section">
+        <h2>任务列表</h2>
+        <div id="task-list">
+          <p class="empty">暂无任务</p>
+        </div>
+      </section>
+    </aside>
+
+    <!-- 中央: 3D 视图 -->
+    <main id="viewer-container">
+      <canvas id="viewer-canvas"></canvas>
+      <div id="viewer-controls">
+        <button class="btn btn-sm active" data-mode="solid">实体</button>
+        <button class="btn btn-sm" data-mode="wireframe">线框</button>
+        <button class="btn btn-sm" data-mode="parts">模块</button>
+        <button class="btn btn-sm" id="btn-reset-camera">重置视角</button>
+      </div>
+      <div id="viewer-info">
+        <span id="info-verts">-</span> 顶点 |
+        <span id="info-faces">-</span> 面 |
+        <span id="info-parts">-</span> 模块
+      </div>
+    </main>
+
+    <!-- 右侧面板: 模块 + 导出 -->
+    <aside id="right-panel">
+      <section class="panel-card" id="parts-section">
+        <h2>模块列表</h2>
+        <div id="part-list">
+          <p class="empty">请先完成重建和拆解</p>
+        </div>
+      </section>
+
+      <section class="panel-card" id="export-section">
+        <h2>导出</h2>
+        <div id="export-buttons">
+          <button class="btn btn-primary" id="btn-download-all" disabled>下载全部 STL</button>
+          <button class="btn" id="btn-download-part" disabled>下载选中模块</button>
+        </div>
+        <div id="export-status"></div>
+      </section>
+
+      <section class="panel-card" id="print-section" style="display:none">
+        <h2>打印分析</h2>
+        <div id="print-report"></div>
+      </section>
+    </aside>
+  </div>
+
+  <!-- 进度条 -->
+  <div id="progress-bar" style="display:none">
+    <div id="progress-fill"></div>
+    <span id="progress-text">0%</span>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>
