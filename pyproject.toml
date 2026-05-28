@@ -41,7 +41,9 @@ target-version = "py310"
 select = ["E", "F", "I", "N", "W"]
 
 [tool.ruff.lint.per-file-ignores]
-"src/splatting.py" = ["N806", "N803", "N812"]  # 数学矩阵变量 + PyTorch F 别名
+"src/splatting.py" = ["N806", "N812"]              # 3DGS 数学变量名 + PyTorch F 别名
+"src/gaussian_model.py" = ["N806"]                 # 旋转/缩放矩阵 R, S
+"src/splatting_kernel.py" = ["N803", "N806"]       # 3DGS 论文变量名: means2D/cov2D/T/dLdC/... + 参数命名
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

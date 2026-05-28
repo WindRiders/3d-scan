@@ -92,7 +92,10 @@ class _SplatRasterize(torch.autograd.Function):
                     "T_before": T_patch,
                 })
 
-        ctx.save_for_backward(means2D, cov2D, colors, opacities, z_depth, visible, inv_a, inv_b, inv_d, det)
+        ctx.save_for_backward(
+            means2D, cov2D, colors, opacities, z_depth, visible,
+            inv_a, inv_b, inv_d, det,
+        )
         ctx.saved_splat_data = saved
         return rendered.permute(2, 0, 1)
 
@@ -101,7 +104,10 @@ class _SplatRasterize(torch.autograd.Function):
         ctx: torch.autograd.function.FunctionCtx,
         grad_output: torch.Tensor,
     ) -> tuple:
-        means2D, cov2D, colors, opacities, z_depth, visible, inv_a, inv_b, inv_d, det = ctx.saved_tensors
+        (
+            means2D, cov2D, colors, opacities, z_depth, visible,
+            inv_a, inv_b, inv_d, det,
+        ) = ctx.saved_tensors
         saved = ctx.saved_splat_data
         img_h, img_w = ctx.img_h, ctx.img_w
         device = ctx.device
