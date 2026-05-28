@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "4")
+
 import logging
 import shutil
 from pathlib import Path
