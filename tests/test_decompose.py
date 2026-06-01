@@ -147,7 +147,10 @@ def test_segment_by_graph_cut_no_adjacency() -> None:
 def test_render_views(bunny_mesh: trimesh.Trimesh) -> None:
     """多视图渲染生成图像列表."""
     pytest.importorskip("pyglet")
-    images = render_views(bunny_mesh, num_views=4, resolution=(64, 64))
+    try:
+        images = render_views(bunny_mesh, num_views=4, resolution=(64, 64))
+    except ImportError:
+        pytest.skip("OpenGL 库不可用")
     assert len(images) == 4
     for img in images:
         assert isinstance(img, np.ndarray)
