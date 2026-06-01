@@ -24,6 +24,7 @@ services:
       - ./data:/app/data
       - ./output:/app/output
       - ./uploads:/app/uploads
+      - /root/.cache/huggingface:/root/.cache/huggingface
     deploy:
       resources:
         reservations:
