@@ -14,6 +14,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from src.config import DATA_DIR, OUTPUT_DIR, UPLOAD_DIR
 from src.config import config as cfg
@@ -29,7 +30,62 @@ logger = logging.getLogger(__name__)
 
 WEB_DIR = Path(__file__).resolve().parent / "web" / "static"
 
-app = FastAPI(title="3D Scan", version="0.1.0")
+# ── API 模型 ──
+
+TASK_TAG = "任务管理"
+FILES_TAG = "文件下载"
+
+
+class HealthResponse(BaseModel):
+    status: str = Field(description="服务状态")
+    phases: list[str] = Field(description="支持的流水线阶段")
+
+
+class TaskCreateResponse(BaseModel):
+    task_id: str = Field(description="任务唯一标识")
+    image_count: int = Field(description="已上传图片数量")
+
+
+class TaskInfo(BaseModel):
+    id: str = Field(description="任务 ID")
+    status: str = Field(description="当前状态: uploaded/preprocessing/reconstructing/...")
+    image_count: int = Field(description="图片数量")
+    image_paths: list[str] = Field(description="图片路径列表")
+
+
+class PartInfo(BaseModel):
+    name: str = Field(description="部件名称（中文）")
+    filename: str = Field(description="STL 文件名")
+    face_count: int = Field(description="面数")
+
+
+class TaskProcessResponse(BaseModel):
+    id: str = Field(description="任务 ID")
+    status: str = Field(description="最终状态: done/failed")
+    image_count: int = Field(description="图片数量")
+    image_paths: list[str] = Field(description="图片路径列表")
+    output: dict | None = Field(None, description="输出文件路径 (stl/ply/pointcloud)")
+    print_report: dict | None = Field(None, description="3D 打印分析报告")
+    parts: list[PartInfo] | None = Field(None, description="拆解部件列表")
+    part_files: list[str] | None = Field(None, description="部件文件路径列表")
+    error: str | None = Field(None, description="错误信息（status=failed 时）")
+
+
+class TaskDeleteResponse(BaseModel):
+    deleted: str = Field(description="已删除的任务 ID")
+
+
+app = FastAPI(
+    title="3D Scan API",
+    description="多角度图片 → 高精度 3D 模型重建与模块化拆解。"
+    " 流水线: 上传 → 预处理(去背景) → DUSt3R 重建 → 3DGS 细化(可选)"
+    " → Poisson 网格 → 后处理 → 拆解(可选) → STL/PLY 导出。",
+    version="0.1.0",
+    openapi_tags=[
+        {"name": TASK_TAG, "description": "创建、查询、处理、删除重建任务"},
+        {"name": FILES_TAG, "description": "下载任务产出的模型文件"},
+    ],
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -44,15 +100,15 @@ for d in [DATA_DIR, OUTPUT_DIR, UPLOAD_DIR]:
 tasks: dict = {}
 
 
-@app.get("/api/health")
-async def health() -> dict:
-    return {"status": "ok", "phases": ["1-reconstruct", "2-postprocess", "3-decompose"]}
+@app.get("/api/health", response_model=HealthResponse, tags=[TASK_TAG], summary="健康检查")
+async def health() -> HealthResponse:
+    return HealthResponse(status="ok", phases=["1-reconstruct", "2-postprocess", "3-decompose"])
 
 
 # ── 任务 CRUD ──
 
 
-@app.post("/api/tasks")
+@app.post("/api/tasks", response_model=TaskCreateResponse, tags=[TASK_TAG], summary="创建任务并上传图片")
 async def create_task(files: list[UploadFile] = File(...)):
     if len(files) > cfg.server.max_images_per_task:
         raise HTTPException(400, f"最多 {cfg.server.max_images_per_task} 张")
@@ -71,10 +127,10 @@ async def create_task(files: list[UploadFile] = File(...)):
         "image_count": len(saved),
         "image_paths": [str(p) for p in saved],
     }
-    return {"task_id": tid, "image_count": len(saved)}
+    return TaskCreateResponse(task_id=tid, image_count=len(saved))
 
 
-@app.get("/api/tasks/{tid}")
+@app.get("/api/tasks/{tid}", response_model=TaskInfo, tags=[TASK_TAG], summary="查询任务状态")
 async def get_task(tid: str):
     t = tasks.get(tid)
     if not t:
@@ -82,7 +138,7 @@ async def get_task(tid: str):
     return t
 
 
-@app.post("/api/tasks/{tid}/process")
+@app.post("/api/tasks/{tid}/process", response_model=TaskProcessResponse, tags=[TASK_TAG], summary="执行重建流水线")
 async def process_task(tid: str, decompose_parts: int = 0, refine_3dgs: int = 0):
     t = tasks.get(tid)
     if not t:
@@ -157,7 +213,7 @@ async def process_task(tid: str, decompose_parts: int = 0, refine_3dgs: int = 0)
         raise HTTPException(500, str(e))
 
 
-@app.get("/api/tasks/{tid}/download/{filename:path}")
+@app.get("/api/tasks/{tid}/download/{filename:path}", tags=[FILES_TAG], summary="下载模型文件")
 async def download_file(tid: str, filename: str):
     t = tasks.get(tid)
     if not t:
@@ -178,7 +234,7 @@ async def download_file(tid: str, filename: str):
     raise HTTPException(404, "文件不存在")
 
 
-@app.delete("/api/tasks/{tid}")
+@app.delete("/api/tasks/{tid}", response_model=TaskDeleteResponse, tags=[TASK_TAG], summary="删除任务和文件")
 async def delete_task(tid: str):
     t = tasks.pop(tid, None)
     if not t:
@@ -186,7 +242,7 @@ async def delete_task(tid: str):
     for d in [UPLOAD_DIR / tid, OUTPUT_DIR / tid]:
         if d.exists():
             shutil.rmtree(d)
-    return {"deleted": tid}
+    return TaskDeleteResponse(deleted=tid)
 
 
 # ── 静态文件（必须在路由之后） ──
