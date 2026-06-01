@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 import pytest
@@ -149,6 +150,69 @@ async def test_delete_task(client: AsyncClient, tmp_path: Path) -> None:
 
     r = await client.get(f"/api/tasks/{tid}")
     assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_task_too_many_images(client: AsyncClient, tmp_path: Path) -> None:
+    """上传图片超过限制时返回 400."""
+    with mock.patch("src.server.cfg") as m:
+        m.server.max_images_per_task = 2
+        files = []
+        for i in range(3):
+            img = _make_test_image(tmp_path)
+            files.append(("files", (f"img_{i}.jpg", open(img, "rb"), "image/jpeg")))
+        r = await client.post("/api/tasks", files=files)
+        assert r.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_delete_task_not_found(client: AsyncClient) -> None:
+    """删除不存在的任务返回 404."""
+    r = await client.delete("/api/tasks/nonexistent")
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_download_file_task_not_found(client: AsyncClient) -> None:
+    """下载时任务不存在返回 404."""
+    r = await client.get("/api/tasks/nonexistent/download/model.stl")
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_download_file_not_found(client: AsyncClient, tmp_path: Path) -> None:
+    """任务存在但文件不存在返回 404."""
+    img = _make_test_image(tmp_path)
+    with open(img, "rb") as f:
+        r = await client.post(
+            "/api/tasks", files={"files": ("test.jpg", f, "image/jpeg")}
+        )
+    tid = r.json()["task_id"]
+    r = await client.get(f"/api/tasks/{tid}/download/nonexistent.stl")
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_process_task_not_found(client: AsyncClient) -> None:
+    """处理不存在的任务返回 404."""
+    r = await client.post("/api/tasks/nonexistent/process")
+    assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_task_success(client: AsyncClient, tmp_path: Path) -> None:
+    """查询已创建的任务返回完整信息."""
+    img = _make_test_image(tmp_path)
+    with open(img, "rb") as f:
+        r = await client.post(
+            "/api/tasks", files={"files": ("test.jpg", f, "image/jpeg")}
+        )
+    tid = r.json()["task_id"]
+    r = await client.get(f"/api/tasks/{tid}")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "uploaded"
+    assert data["image_count"] == 1
 
 
 @pytest.mark.asyncio

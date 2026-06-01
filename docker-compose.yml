@@ -4,28 +4,19 @@
 # 查看: docker compose logs -f app
 # 停止: docker compose down
 
-version: "3.9"
-
 services:
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-
   app:
     build:
       context: .
       args:
-        INSTALL_GPU: ${INSTALL_GPU:-0}
+        INSTALL_GPU: ${INSTALL_GPU:-1}
     image: 3d-scan:${TAG:-latest}
     restart: unless-stopped
     ports:
-      - "${PORT:-8000}:8000"
+      - "${PORT:-8080}:8080"
     environment:
       - OPENBLAS_NUM_THREADS=4
       - HF_ENDPOINT=https://hf-mirror.com
-      - CELERY_BROKER_URL=redis://redis:6379/0
       - DATA_DIR=/app/data
       - OUTPUT_DIR=/app/output
       - UPLOAD_DIR=/app/uploads
@@ -33,8 +24,6 @@ services:
       - ./data:/app/data
       - ./output:/app/output
       - ./uploads:/app/uploads
-    depends_on:
-      - redis
     deploy:
       resources:
         reservations:
@@ -42,35 +31,3 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-
-  worker:
-    build:
-      context: .
-      args:
-        INSTALL_GPU: 1
-    image: 3d-scan:${TAG:-latest}-gpu
-    restart: unless-stopped
-    command: celery -A src.tasks worker --loglevel=info --concurrency=1
-    environment:
-      - OPENBLAS_NUM_THREADS=4
-      - HF_ENDPOINT=https://hf-mirror.com
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - DATA_DIR=/app/data
-      - OUTPUT_DIR=/app/output
-      - UPLOAD_DIR=/app/uploads
-    volumes:
-      - ./data:/app/data
-      - ./output:/app/output
-      - ./uploads:/app/uploads
-    depends_on:
-      - redis
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
-volumes:
-  redis_data:
