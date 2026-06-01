@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class QualityReport:
     """图片质量检查结果."""
+
     file_path: Path
     is_ok: bool
     blur_score: float
@@ -38,17 +39,18 @@ def check_brightness(image: np.ndarray) -> float:
     return float(gray.mean())
 
 
-def quality_check(
-    file_path: Path, config: ImageConfig
-) -> QualityReport:
+def quality_check(file_path: Path, config: ImageConfig) -> QualityReport:
     """对单张图片做质量检查."""
     issues: list[str] = []
     img = cv2.imread(str(file_path))
     if img is None:
         return QualityReport(
-            file_path=file_path, is_ok=False,
-            blur_score=0.0, avg_brightness=0.0,
-            resolution=(0, 0), issues=["无法读取图片"],
+            file_path=file_path,
+            is_ok=False,
+            blur_score=0.0,
+            avg_brightness=0.0,
+            resolution=(0, 0),
+            issues=["无法读取图片"],
         )
 
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -78,7 +80,8 @@ def quality_check(
 
 
 def quality_check_batch(
-    file_paths: list[Path], config: ImageConfig,
+    file_paths: list[Path],
+    config: ImageConfig,
 ) -> list[QualityReport]:
     """批量质量检查，返回所有报告."""
     return [quality_check(p, config) for p in file_paths]

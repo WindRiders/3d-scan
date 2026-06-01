@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ConnectorSpec:
     """连接件规格."""
+
     type: str  # dovetail / pin_hole / magnet / snap_fit
     position: np.ndarray
     orientation: np.ndarray
@@ -22,6 +23,7 @@ class ConnectorSpec:
 
 
 # ── 燕尾榫 (Dovetail) ──
+
 
 def generate_dovetail_pair(
     joint_center: np.ndarray,
@@ -51,12 +53,14 @@ def generate_dovetail_pair(
     inset = clearance / 2
 
     # 榫头梯形顶点
-    local_verts = np.array([
-        [-half_w + inset, 0, 0],
-        [-half_w + inset + tail_depth * np.tan(angle_rad), tail_depth, 0],
-        [half_w - inset - tail_depth * np.tan(angle_rad), tail_depth, 0],
-        [half_w - inset, 0, 0],
-    ])
+    local_verts = np.array(
+        [
+            [-half_w + inset, 0, 0],
+            [-half_w + inset + tail_depth * np.tan(angle_rad), tail_depth, 0],
+            [half_w - inset - tail_depth * np.tan(angle_rad), tail_depth, 0],
+            [half_w - inset, 0, 0],
+        ]
+    )
 
     world_verts = joint_center + (
         local_verts[:, 0:1] * tangent
@@ -80,6 +84,7 @@ def generate_dovetail_pair(
 
 
 # ── 圆柱销 + 孔 ──
+
 
 def generate_pin_hole_pair(
     position: np.ndarray,
@@ -111,6 +116,7 @@ def generate_pin_hole_pair(
 
 # ── 磁铁槽 ──
 
+
 def generate_magnet_slot(
     position: np.ndarray,
     face_normal: np.ndarray,
@@ -133,6 +139,7 @@ def generate_magnet_slot(
 
 # ── 卡扣 (Snap-Fit) ──
 
+
 def generate_snap_fit(
     base_position: np.ndarray,
     engagement_direction: np.ndarray,
@@ -153,17 +160,27 @@ def generate_snap_fit(
     rot_matrix = np.column_stack([width_dir, engagement_direction, up])
 
     beam = trimesh.creation.box(extents=[beam_width, beam_length, beam_thickness])
-    beam.apply_transform(np.vstack([
-        np.column_stack([rot_matrix, base_position + engagement_direction * beam_length * 0.5]),
-        [0, 0, 0, 1],
-    ]))
+    beam.apply_transform(
+        np.vstack(
+            [
+                np.column_stack(
+                    [rot_matrix, base_position + engagement_direction * beam_length * 0.5]
+                ),
+                [0, 0, 0, 1],
+            ]
+        )
+    )
 
     hook = trimesh.creation.box(extents=[beam_width, beam_length * 0.3, hook_height])
     hook_pos = base_position + engagement_direction * (beam_length * 0.8)
-    hook.apply_transform(np.vstack([
-        np.column_stack([rot_matrix, hook_pos]),
-        [0, 0, 0, 1],
-    ]))
+    hook.apply_transform(
+        np.vstack(
+            [
+                np.column_stack([rot_matrix, hook_pos]),
+                [0, 0, 0, 1],
+            ]
+        )
+    )
 
     snap = trimesh.util.concatenate([beam, hook])
     logger.info("卡扣: %.0f×%.1f×%.1fmm", beam_width, beam_length, beam_thickness)
@@ -171,6 +188,7 @@ def generate_snap_fit(
 
 
 # ── 辅助 ──
+
 
 def _extrude_polygon(
     vertices: np.ndarray,

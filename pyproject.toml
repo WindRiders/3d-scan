@@ -39,11 +39,14 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
+ignore = ["N999"]  # 项目名含连字符 (3d-scan)
 
 [tool.ruff.lint.per-file-ignores]
 "src/splatting.py" = ["N806", "N812"]              # 3DGS 数学变量名 + PyTorch F 别名
 "src/gaussian_model.py" = ["N806"]                 # 旋转/缩放矩阵 R, S
 "src/splatting_kernel.py" = ["N803", "N806"]       # 3DGS 论文变量名: means2D/cov2D/T/dLdC/... + 参数命名
+"tests/test_connectors.py" = ["N806"]               # 旋转矩阵变量 R
+"tests/test_splatting.py" = ["E402"]                # importorskip 后才能 import torch 模块
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

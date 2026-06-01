@@ -40,11 +40,20 @@ class GaussianModel(nn.Module):
         """从 scaling + rotation(四元数) 构建 3D 协方差矩阵."""
         rot = self._rotation / self._rotation.norm(dim=1, keepdim=True)
         r, x, y, z = rot[:, 0], rot[:, 1], rot[:, 2], rot[:, 3]
-        R = torch.stack([
-            torch.stack([1 - 2*(y**2 + z**2), 2*(x*y - r*z), 2*(x*z + r*y)], dim=1),
-            torch.stack([2*(x*y + r*z), 1 - 2*(x**2 + z**2), 2*(y*z - r*x)], dim=1),
-            torch.stack([2*(x*z - r*y), 2*(y*z + r*x), 1 - 2*(x**2 + y**2)], dim=1),
-        ], dim=1)
+        R = torch.stack(
+            [
+                torch.stack(
+                    [1 - 2 * (y**2 + z**2), 2 * (x * y - r * z), 2 * (x * z + r * y)], dim=1
+                ),
+                torch.stack(
+                    [2 * (x * y + r * z), 1 - 2 * (x**2 + z**2), 2 * (y * z - r * x)], dim=1
+                ),
+                torch.stack(
+                    [2 * (x * z - r * y), 2 * (y * z + r * x), 1 - 2 * (x**2 + y**2)], dim=1
+                ),
+            ],
+            dim=1,
+        )
         S = torch.diag_embed(self._scaling)
         cov = R @ S @ S.transpose(1, 2) @ R.transpose(1, 2)
         return cov
@@ -59,7 +68,10 @@ class GaussianModel(nn.Module):
         }
 
     def densify_and_prune(
-        self, max_grad: float, min_opacity: float, max_screen_size: float,
+        self,
+        max_grad: float,
+        min_opacity: float,
+        max_screen_size: float,
     ) -> None:
         """自适应密度控制：分裂高梯度高斯，剪除低透明度和过大的."""
         grads = self._xyz.grad
@@ -92,11 +104,11 @@ class GaussianModel(nn.Module):
         new_rot = self._rotation.data[indices].clone()
         self._rotation = nn.Parameter(torch.cat([self._rotation.data, new_rot], dim=0))
 
-        max_axis = self._scaling.data[-len(indices):].argmax(dim=1)
-        offset = torch.zeros_like(self._xyz.data[-len(indices):])
+        max_axis = self._scaling.data[-len(indices) :].argmax(dim=1)
+        offset = torch.zeros_like(self._xyz.data[-len(indices) :])
         for j, ax in enumerate(max_axis):
             offset[j, ax] = self._scaling.data[-len(indices) + j, ax]
-        self._xyz.data[-len(indices):] += offset
+        self._xyz.data[-len(indices) :] += offset
 
     def _prune_gaussians(self, mask: torch.Tensor) -> None:
         keep = ~mask

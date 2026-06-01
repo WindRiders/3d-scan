@@ -31,6 +31,7 @@ def _is_dust3r_available() -> bool:
         from dust3r.model import AsymmetricCroCo3DStereo  # noqa: F401
         from dust3r.utils.device import to_numpy  # noqa: F401
         from dust3r.utils.image import load_images  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -58,9 +59,7 @@ def run_dust3r_reconstruction(
     logger.info("DUSt3R 使用设备: %s", device)
 
     # 加载模型
-    model = AsymmetricCroCo3DStereo.from_pretrained(
-        f"naver/{config.dust3r_model}"
-    ).to(device)
+    model = AsymmetricCroCo3DStereo.from_pretrained(f"naver/{config.dust3r_model}").to(device)
 
     # 加载图片 → DUSt3R 格式
     img_paths_str = [str(p.resolve()) for p in image_paths]
@@ -69,12 +68,15 @@ def run_dust3r_reconstruction(
     except AttributeError:
         square_ok = False
     imgs = load_images(
-        img_paths_str, size=512,
-        patch_size=model.patch_size, square_ok=square_ok,
+        img_paths_str,
+        size=512,
+        patch_size=model.patch_size,
+        square_ok=square_ok,
     )
     # 单张图片：DUSt3R 至少需要 2 张才能配对，复制一份
     if len(imgs) == 1:
         import copy
+
         imgs = [imgs[0], copy.deepcopy(imgs[0])]
         imgs[1]["idx"] = 1
         logger.info("单张图片模式：已复制为 2 张配对")
@@ -86,14 +88,14 @@ def run_dust3r_reconstruction(
     output = inference(pairs, model, device, batch_size=1)
 
     # 全局对齐优化
-    mode = (
-        GlobalAlignerMode.PointCloudOptimizer if len(imgs) > 2
-        else GlobalAlignerMode.PairViewer
-    )
+    mode = GlobalAlignerMode.PointCloudOptimizer if len(imgs) > 2 else GlobalAlignerMode.PairViewer
     scene = global_aligner(output, device=device, mode=mode)
     if mode == GlobalAlignerMode.PointCloudOptimizer:
         loss = scene.compute_global_alignment(
-            init="mst", niter=300, schedule="linear", lr=0.01,
+            init="mst",
+            niter=300,
+            schedule="linear",
+            lr=0.01,
         )
         logger.info("全局对齐完成, loss=%.4f", loss)
 
@@ -106,7 +108,7 @@ def run_dust3r_reconstruction(
     all_pts = []
     for img, pts, mask in zip(imgs_tensor, pts3d, masks):
         visible = pts[mask]  # (V, 3)
-        colors = img[mask]   # (V, 3)
+        colors = img[mask]  # (V, 3)
         all_pts.append(np.concatenate([visible, colors], axis=1))
 
     combined = np.concatenate(all_pts, axis=0).astype(np.float32)
@@ -123,11 +125,17 @@ def run_dust3r_reconstruction(
     logger.info("相机位姿已保存: %s (%d views)", cam_path, len(cam_poses))
 
     meta_path = work_dir / "reconstruction_meta.json"
-    meta_path.write_text(json.dumps({
-        "num_images": len(image_paths),
-        "point_count": int(combined.shape[0]),
-        "dust3r_model": config.dust3r_model,
-    }, indent=2, ensure_ascii=False))
+    meta_path.write_text(
+        json.dumps(
+            {
+                "num_images": len(image_paths),
+                "point_count": int(combined.shape[0]),
+                "dust3r_model": config.dust3r_model,
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
 
     return {
         "pointcloud": str(pts_path),
@@ -165,12 +173,18 @@ def _simulated_reconstruction(
     np.save(pts_path, pts)
 
     meta_path = work_dir / "reconstruction_meta.json"
-    meta_path.write_text(json.dumps({
-        "num_images": len(image_paths),
-        "point_count": n_points,
-        "image_resolution": f"{w}x{h}",
-        "mode": "simulated",
-    }, indent=2, ensure_ascii=False))
+    meta_path.write_text(
+        json.dumps(
+            {
+                "num_images": len(image_paths),
+                "point_count": n_points,
+                "image_resolution": f"{w}x{h}",
+                "mode": "simulated",
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
 
     logger.info("模拟点云: %d 点", n_points)
     return {"pointcloud": str(pts_path), "meta": str(meta_path)}
@@ -184,4 +198,5 @@ def run_gaussian_splatting_refinement(
 ) -> Path:
     """3DGS 细化点云."""
     from src.splatting import run_gaussian_splatting_refinement as gs_refine
+
     return gs_refine(pointcloud_path, image_paths, work_dir, config)

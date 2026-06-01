@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PartLabel:
     """单个模块标签."""
+
     part_id: int
     name: str
     face_indices: np.ndarray  # 属于该模块的面索引
@@ -24,6 +25,7 @@ class PartLabel:
 @dataclass
 class Decomposition:
     """拆解结果."""
+
     original_mesh: trimesh.Trimesh
     parts: list[PartLabel]
     face_labels: np.ndarray  # (n_faces,) 每个面对应的 part_id
@@ -47,6 +49,7 @@ class Decomposition:
 
 # ── 多视图渲染 ──
 
+
 def render_views(
     mesh: trimesh.Trimesh,
     num_views: int = 12,
@@ -63,11 +66,13 @@ def render_views(
     points = []
     for p in phi:
         for t in theta:
-            points.append([
-                np.sin(p) * np.cos(t),
-                np.sin(p) * np.sin(t),
-                np.cos(p),
-            ])
+            points.append(
+                [
+                    np.sin(p) * np.cos(t),
+                    np.sin(p) * np.sin(t),
+                    np.cos(p),
+                ]
+            )
 
     for i, direction in enumerate(points[:num_views]):
         img = scene.save_image(resolution=resolution, visible=True)
@@ -78,6 +83,7 @@ def render_views(
 
 
 # ── 语义分割（几何启发式 + 模拟模式） ──
+
 
 def segment_by_graph_cut(
     mesh: trimesh.Trimesh,
@@ -163,16 +169,19 @@ def segment_semantic(
 
     logger.info(
         "语义分割完成: %d 个模块, 方法=%s",
-        len(np.unique(labels)), method,
+        len(np.unique(labels)),
+        method,
     )
     return labels
 
 
 # ── 切割平面工具 ──
 
+
 @dataclass
 class CutPlane:
     """切割平面: point + normal (ax+by+cz+d=0)."""
+
     point: np.ndarray  # 3D 点
     normal: np.ndarray  # 单位法向量
 
@@ -233,6 +242,7 @@ def cut_mesh_multi_plane(
 
 # ── 笔刷选取 ──
 
+
 def brush_select_faces(
     mesh: trimesh.Trimesh,
     seed_face: int,
@@ -282,6 +292,7 @@ def brush_select_radius(
 
 # ── 完整拆解流水线 ──
 
+
 def decompose(
     mesh: trimesh.Trimesh,
     method: str = "convexity",
@@ -290,7 +301,9 @@ def decompose(
 ) -> Decomposition:
     """完整拆解流水线."""
     labels = segment_semantic(
-        mesh, method=method, num_parts=num_parts,
+        mesh,
+        method=method,
+        num_parts=num_parts,
         optimize_boundaries=optimize_boundaries,
     )
 
@@ -301,16 +314,18 @@ def decompose(
 
     for i, lid in enumerate(unique_labels):
         face_idx = np.where(labels == lid)[0]
-        parts.append(PartLabel(
-            part_id=int(lid),
-            name=part_names[i] if i < len(part_names) else f"部件{i}",
-            face_indices=face_idx,
-            color=(
-                int(rng.randint(50, 220)),
-                int(rng.randint(50, 220)),
-                int(rng.randint(50, 220)),
-            ),
-        ))
+        parts.append(
+            PartLabel(
+                part_id=int(lid),
+                name=part_names[i] if i < len(part_names) else f"部件{i}",
+                face_indices=face_idx,
+                color=(
+                    int(rng.randint(50, 220)),
+                    int(rng.randint(50, 220)),
+                    int(rng.randint(50, 220)),
+                ),
+            )
+        )
 
     # 提取切割边
     boundaries = _extract_cut_boundaries(mesh, labels)
@@ -348,6 +363,7 @@ def _extract_cut_boundaries(
 
 
 # ── 导出拆解结果 ──
+
 
 def export_parts(
     decomp: Decomposition,

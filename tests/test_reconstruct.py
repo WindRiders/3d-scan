@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -81,7 +81,9 @@ class TestReconstructionWithFallback:
         assert not _is_dust3r_available()
 
     def test_falls_back_to_simulated(
-        self, test_images: list[Path], tmp_path: Path,
+        self,
+        test_images: list[Path],
+        tmp_path: Path,
     ) -> None:
         """DUSt3R 不可用时自动回退到模拟."""
         if _is_dust3r_available():
@@ -115,19 +117,21 @@ class TestGaussianSplattingRefinement:
         pytest.importorskip("torch", reason="需要 torch/splatting 模块")
 
     def test_delegates_to_splatting_module(
-        self, tmp_path: Path,
+        self,
+        tmp_path: Path,
     ) -> None:
         """run_gaussian_splatting_refinement 委托到 splatting 模块."""
         pts = np.random.RandomState(42).uniform(-1, 1, (1000, 6)).astype(np.float32)
         pcd_path = tmp_path / "test_pcd.npy"
         np.save(pcd_path, pts)
 
-        with patch(
-            "src.splatting.run_gaussian_splatting_refinement"
-        ) as mock_gs:
+        with patch("src.splatting.run_gaussian_splatting_refinement") as mock_gs:
             mock_gs.return_value = tmp_path / "refined.npy"
             result = run_gaussian_splatting_refinement(
-                pcd_path, [], tmp_path, ReconstructConfig(),
+                pcd_path,
+                [],
+                tmp_path,
+                ReconstructConfig(),
             )
             assert result == tmp_path / "refined.npy"
             mock_gs.assert_called_once()
@@ -139,12 +143,13 @@ class TestGaussianSplattingRefinement:
         np.save(pcd_path, pts)
 
         config = ReconstructConfig(gaussian_splatting_iterations=1000)
-        with patch(
-            "src.splatting.run_gaussian_splatting_refinement"
-        ) as mock_gs:
+        with patch("src.splatting.run_gaussian_splatting_refinement") as mock_gs:
             mock_gs.return_value = tmp_path / "ref.npy"
             run_gaussian_splatting_refinement(
-                pcd_path, [tmp_path / "a.jpg"], tmp_path, config,
+                pcd_path,
+                [tmp_path / "a.jpg"],
+                tmp_path,
+                config,
             )
             call_args = mock_gs.call_args[0]
             assert call_args[3].gaussian_splatting_iterations == 1000

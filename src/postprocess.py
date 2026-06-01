@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MeshValidation:
     """网格质量验证结果."""
+
     is_watertight: bool
     is_manifold: bool
     vertex_count: int
@@ -122,7 +123,7 @@ def _estimate_min_wall_thickness(mesh: trimesh.Trimesh) -> float | None:
         if len(hit_points) == 0:
             return None
 
-        distances = np.linalg.norm(hit_points - samples[:len(hit_points)], axis=1)
+        distances = np.linalg.norm(hit_points - samples[: len(hit_points)], axis=1)
         return float(np.min(distances[distances > 0.01]))  # 过滤自身
     except Exception:
         return None
@@ -248,27 +249,31 @@ def wall_thickness_report(mesh_path: Path) -> dict:
 
     # FDM 打印参考阈值
     fdm_min_wall = 1.2  # mm, 0.4mm 喷嘴
-    sla_min_wall = 0.5   # mm, 光固化
+    sla_min_wall = 0.5  # mm, 光固化
 
     risk_zones: list[dict] = []
     if min_wall is not None:
         if min_wall < fdm_min_wall:
-            risk_zones.append({
-                "type": "壁厚不足",
-                "min_thickness_mm": round(min_wall, 3),
-                "threshold_fdm_mm": fdm_min_wall,
-                "severity": "high" if min_wall < 0.8 else "medium",
-            })
+            risk_zones.append(
+                {
+                    "type": "壁厚不足",
+                    "min_thickness_mm": round(min_wall, 3),
+                    "threshold_fdm_mm": fdm_min_wall,
+                    "severity": "high" if min_wall < 0.8 else "medium",
+                }
+            )
 
     # 悬垂检测
     overhang_ratio = _detect_overhang(tm, angle_threshold=45)
     if overhang_ratio > 0.05:
-        risk_zones.append({
-            "type": "悬垂区域",
-            "ratio": round(overhang_ratio, 2),
-            "threshold_angle_deg": 45,
-            "severity": "high" if overhang_ratio > 0.15 else "medium",
-        })
+        risk_zones.append(
+            {
+                "type": "悬垂区域",
+                "ratio": round(overhang_ratio, 2),
+                "threshold_angle_deg": 45,
+                "severity": "high" if overhang_ratio > 0.15 else "medium",
+            }
+        )
 
     return {
         "bbox_diagonal_mm": round(diag, 1),

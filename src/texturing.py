@@ -10,6 +10,7 @@ import trimesh
 
 try:
     import xatlas
+
     _has_xatlas = True
 except ImportError:
     xatlas = None  # type: ignore[assignment]
@@ -41,7 +42,9 @@ def unwrap_uv(
     vmapping, indices, uvs = atlas.get_mesh(0)
     logger.info(
         "UV 展开完成: %d 顶点, %d UV 坐标, %d 面",
-        len(vmapping), len(uvs), len(indices),
+        len(vmapping),
+        len(uvs),
+        len(indices),
     )
 
     # 构建带 UV 的输出网格
@@ -73,9 +76,7 @@ def bake_vertex_color(
 
     # 检查是否有顶点颜色
     has_color = (
-        tm.visual is not None
-        and tm.visual.kind is not None
-        and "vertex" in str(tm.visual.kind)
+        tm.visual is not None and tm.visual.kind is not None and "vertex" in str(tm.visual.kind)
     )
     if not has_color:
         logger.warning("网格无顶点颜色，生成纯色纹理")
@@ -123,7 +124,8 @@ def bake_ambient_occlusion(
         hits = 0
         for d in dirs:
             loc, _, _ = tm.ray.intersects_location(
-                [v + n * 0.001], [d],
+                [v + n * 0.001],
+                [d],
             )
             if len(loc) > 0:
                 dist = np.linalg.norm(loc[0] - v)

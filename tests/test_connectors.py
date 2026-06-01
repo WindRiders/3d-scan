@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 import trimesh
@@ -126,7 +128,6 @@ def box_mesh() -> trimesh.Trimesh:
 
 def test_export_connectors_creates_stl(box_mesh: trimesh.Trimesh, tmp_path: Path) -> None:
     """导出连接件生成 STL 文件."""
-    from pathlib import Path
     output_dir = tmp_path / "connectors"
     results = export_connectors([box_mesh], output_dir)
     assert len(results) == 1

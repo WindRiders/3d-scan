@@ -1,4 +1,5 @@
 """Web 前端服务测试."""
+
 from __future__ import annotations
 
 import pytest
@@ -42,8 +43,9 @@ async def test_static_js_served(client: AsyncClient) -> None:
     """JS 静态文件可访问."""
     r = await client.get("/static/app.js")
     assert r.status_code == 200
-    assert "application/javascript" in r.headers.get("content-type", "") or \
-           "text/javascript" in r.headers.get("content-type", "")
+    assert "application/javascript" in r.headers.get(
+        "content-type", ""
+    ) or "text/javascript" in r.headers.get("content-type", "")
 
 
 @pytest.mark.asyncio
@@ -60,8 +62,9 @@ async def test_health_phases(client: AsyncClient) -> None:
 async def test_task_limit_enforced(client: AsyncClient) -> None:
     """超过 max_images_per_task 时返回 400."""
     import io
-    from PIL import Image
+
     import numpy as np
+    from PIL import Image
 
     arr = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
     buf = io.BytesIO()
@@ -78,8 +81,9 @@ async def test_download_nonexistent_file(client: AsyncClient) -> None:
     """下载不存在的任务文件."""
     # 先创建任务
     import io
-    from PIL import Image
+
     import numpy as np
+    from PIL import Image
 
     arr = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
     buf = io.BytesIO()

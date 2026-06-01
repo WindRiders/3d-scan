@@ -62,10 +62,13 @@ def rasterize(
     ndc = xyz_clip / w_clip.unsqueeze(1)
 
     # NDC → 像素坐标
-    means2D = torch.stack([
-        (ndc[:, 0] * 0.5 + 0.5) * img_w,
-        (ndc[:, 1] * 0.5 + 0.5) * img_h,
-    ], dim=1)
+    means2D = torch.stack(
+        [
+            (ndc[:, 0] * 0.5 + 0.5) * img_w,
+            (ndc[:, 1] * 0.5 + 0.5) * img_h,
+        ],
+        dim=1,
+    )
 
     # Jacobian: d(screen)/d(camera)
     fx = 0.5 * img_w
@@ -92,8 +95,16 @@ def rasterize(
     opacities = torch.sigmoid(model._opacity).squeeze(-1)
 
     rendered = _SplatRasterize.apply(
-        means2D, cov2D, colors, opacities, z_depth,
-        visible, img_h, img_w, bg_color, device,
+        means2D,
+        cov2D,
+        colors,
+        opacities,
+        z_depth,
+        visible,
+        img_h,
+        img_w,
+        bg_color,
+        device,
     )
     return rendered
 
@@ -140,8 +151,8 @@ def _look_at(eye: np.ndarray, center: np.ndarray, up: np.ndarray) -> np.ndarray:
 
 def ssim_loss(img1: torch.Tensor, img2: torch.Tensor, window_size: int = 11) -> torch.Tensor:
     """计算 1 - SSIM."""
-    C1 = 0.01 ** 2
-    C2 = 0.03 ** 2
+    C1 = 0.01**2
+    C2 = 0.03**2
 
     # 高斯窗口
     sigma = 1.5
@@ -156,11 +167,17 @@ def ssim_loss(img1: torch.Tensor, img2: torch.Tensor, window_size: int = 11) -> 
     mu1 = F.conv2d(img1.unsqueeze(0), window, padding=window_size // 2, groups=3)
     mu2 = F.conv2d(img2.unsqueeze(0), window, padding=window_size // 2, groups=3)
     mu1_sq, mu2_sq = mu1**2, mu2**2
-    sigma1 = F.conv2d(img1.unsqueeze(0)**2, window, padding=window_size // 2, groups=3) - mu1_sq
-    sigma2 = F.conv2d(img2.unsqueeze(0)**2, window, padding=window_size // 2, groups=3) - mu2_sq
-    sigma12 = F.conv2d(
-        (img1 * img2).unsqueeze(0), window, padding=window_size // 2, groups=3,
-    ) - mu1 * mu2
+    sigma1 = F.conv2d(img1.unsqueeze(0) ** 2, window, padding=window_size // 2, groups=3) - mu1_sq
+    sigma2 = F.conv2d(img2.unsqueeze(0) ** 2, window, padding=window_size // 2, groups=3) - mu2_sq
+    sigma12 = (
+        F.conv2d(
+            (img1 * img2).unsqueeze(0),
+            window,
+            padding=window_size // 2,
+            groups=3,
+        )
+        - mu1 * mu2
+    )
 
     ssim_map = ((2 * mu1 * mu2 + C1) * (2 * sigma12 + C2)) / (
         (mu1_sq + mu2_sq + C1) * (sigma1 + sigma2 + C2)
@@ -195,6 +212,7 @@ def run_gaussian_splatting_refinement(
 
     # 预加载图像
     from PIL import Image
+
     gt_images = []
     for p in image_paths[: len(cameras)]:
         img = Image.open(p).resize((img_w, img_h))
@@ -225,14 +243,21 @@ def run_gaussian_splatting_refinement(
         # 自适应密度控制
         if step > 0 and step % densify_interval == 0:
             model.densify_and_prune(
-                max_grad=0.0005, min_opacity=0.01, max_screen_size=100.0,
+                max_grad=0.0005,
+                min_opacity=0.01,
+                max_screen_size=100.0,
             )
             # 重建优化器
             optimizer = torch.optim.Adam(model.parameters(), lr=0.001, eps=1e-8)
 
         if step % 100 == 0:
-            logger.info("3DGS step %d/%d  loss=%.5f  gaussians=%d",
-                        step, iterations, loss.item(), model.num_gaussians)
+            logger.info(
+                "3DGS step %d/%d  loss=%.5f  gaussians=%d",
+                step,
+                iterations,
+                loss.item(),
+                model.num_gaussians,
+            )
 
     # 提取优化后的点云
     refined_xyz = model._xyz.detach().cpu().numpy()

@@ -113,12 +113,13 @@ def test_ssim_loss_identical() -> None:
 
 def test_densify_and_prune(gaussian_model: GaussianModel) -> None:
     """自适应密度控制不崩溃."""
-    n_before = gaussian_model.num_gaussians
     # 设置假梯度触发分裂
     gaussian_model._xyz.grad = torch.randn_like(gaussian_model._xyz) * 0.001
     gaussian_model.max_radii2D[:] = 10.0
     gaussian_model.densify_and_prune(
-        max_grad=0.0001, min_opacity=0.005, max_screen_size=200.0,
+        max_grad=0.0001,
+        min_opacity=0.005,
+        max_screen_size=200.0,
     )
     # 应保持合理的高斯数量（不会全删）
     assert gaussian_model.num_gaussians > 0

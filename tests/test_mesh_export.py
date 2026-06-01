@@ -80,12 +80,15 @@ def test_simplify_mesh(sphere_pcd: o3d.geometry.PointCloud) -> None:
 
 
 def test_pointcloud_to_mesh_end_to_end(
-    sphere_pcd_path: Path, tmp_path: Path,
+    sphere_pcd_path: Path,
+    tmp_path: Path,
 ) -> None:
     """端到端点云→网格."""
     config = MeshConfig(target_faces=2000, voxel_size=0.05)
     ply_path, stl_path = pointcloud_to_mesh(
-        sphere_pcd_path, tmp_path / "out", config,
+        sphere_pcd_path,
+        tmp_path / "out",
+        config,
     )
     assert ply_path.exists()
     assert stl_path.exists()

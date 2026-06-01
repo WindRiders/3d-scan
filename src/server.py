@@ -51,6 +51,7 @@ async def health() -> dict:
 
 # ── 任务 CRUD ──
 
+
 @app.post("/api/tasks")
 async def create_task(files: list[UploadFile] = File(...)):
     if len(files) > cfg.server.max_images_per_task:
@@ -65,7 +66,8 @@ async def create_task(files: list[UploadFile] = File(...)):
         file_path.write_bytes(content)
         saved.append(file_path)
     tasks[tid] = {
-        "id": tid, "status": "uploaded",
+        "id": tid,
+        "status": "uploaded",
         "image_count": len(saved),
         "image_paths": [str(p) for p in saved],
     }
@@ -103,7 +105,10 @@ async def process_task(tid: str, decompose_parts: int = 0, refine_3dgs: int = 0)
         if refine_3dgs > 0:
             t["status"] = "refining_3dgs"
             pcd_path = run_gaussian_splatting_refinement(
-                pcd_path, clean, work_dir, cfg.reconstruct,
+                pcd_path,
+                clean,
+                work_dir,
+                cfg.reconstruct,
             )
             t["refined_pointcloud"] = str(pcd_path)
 
@@ -128,6 +133,7 @@ async def process_task(tid: str, decompose_parts: int = 0, refine_3dgs: int = 0)
         if decompose_parts > 0:
             t["status"] = "decomposing"
             import trimesh
+
             mesh = trimesh.load(str(final_mesh_path), force="mesh")
             if not isinstance(mesh, trimesh.Trimesh):
                 raise HTTPException(500, "网格加载失败")
@@ -185,6 +191,7 @@ async def delete_task(tid: str):
 
 # ── 静态文件（必须在路由之后） ──
 
+
 @app.get("/")
 async def root():
     return FileResponse(WEB_DIR / "index.html")
@@ -196,4 +203,5 @@ if WEB_DIR.exists():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host=cfg.server.host, port=cfg.server.port)

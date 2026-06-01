@@ -14,6 +14,7 @@ UPLOAD_DIR = PROJECT_ROOT / "uploads"
 @dataclass
 class ImageConfig:
     """图像预处理参数."""
+
     min_resolution: tuple[int, int] = (512, 512)  # 低于此分辨率拒绝
     max_blur_score: float = 100.0  # Laplacian 方差阈值
     min_brightness: float = 20.0  # 最低平均亮度
@@ -24,6 +25,7 @@ class ImageConfig:
 @dataclass
 class ReconstructConfig:
     """三维重建参数."""
+
     dust3r_model: str = "DUSt3R_ViTLarge_BaseDecoder_512_dpt"
     image_size: int = 512
     min_confidence: float = 3.0  # DUSt3R 置信度阈值
@@ -34,6 +36,7 @@ class ReconstructConfig:
 @dataclass
 class MeshConfig:
     """网格后处理参数."""
+
     target_faces: int = 500_000
     hole_fill_radius: float = 2.0  # mm
     smooth_iterations: int = 10
@@ -43,6 +46,7 @@ class MeshConfig:
 @dataclass
 class ServerConfig:
     """Web 服务配置."""
+
     host: str = "0.0.0.0"
     port: int = 8080
     max_upload_size: int = 200 * 1024 * 1024  # 200MB

@@ -37,7 +37,8 @@ def remove_outliers(
 ) -> o3d.geometry.PointCloud:
     """统计滤波去除离群点."""
     cl, ind = pcd.remove_statistical_outlier(
-        nb_neighbors=nb_neighbors, std_ratio=std_ratio,
+        nb_neighbors=nb_neighbors,
+        std_ratio=std_ratio,
     )
     logger.info("离群点过滤: %d → %d", len(pcd.points), len(ind))
     return pcd.select_by_index(ind)
@@ -63,7 +64,8 @@ def poisson_mesh(
 ) -> o3d.geometry.TriangleMesh:
     """Poisson 表面重建."""
     mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
-        pcd, depth=depth,
+        pcd,
+        depth=depth,
     )
     # 裁剪低密度区域
     densities = np.asarray(densities)
@@ -173,7 +175,8 @@ def quick_preview_mesh(
     # Ball pivoting 比 Poisson 快 10x 以上
     radii = [voxel_size * 2, voxel_size * 4, voxel_size * 8]
     mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
-        pcd, o3d.utility.DoubleVector(radii),
+        pcd,
+        o3d.utility.DoubleVector(radii),
     )
 
     o3d.io.write_triangle_mesh(str(output_path), mesh)

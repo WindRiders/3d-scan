@@ -24,7 +24,7 @@ def _make_test_image(tmp_path: Path) -> Path:
     """生成一张测试图片."""
     arr = np.random.randint(0, 256, (600, 800, 3), dtype=np.uint8)
     y, x = np.ogrid[:600, :800]
-    mask = ((x - 400) ** 2 + (y - 300) ** 2) < 150 ** 2
+    mask = ((x - 400) ** 2 + (y - 300) ** 2) < 150**2
     arr[mask] = [100, 150, 200]
     p = tmp_path / "test.jpg"
     Image.fromarray(arr).save(p)

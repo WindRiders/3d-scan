@@ -85,16 +85,28 @@ class _SplatRasterize(torch.autograd.Function):
                 )
                 T[y_min:y_max, x_min:x_max] = T_patch * (1.0 - alpha_3d)
 
-                saved.append({
-                    "idx": idx.item(),
-                    "y_min": y_min, "y_max": y_max,
-                    "x_min": x_min, "x_max": x_max,
-                    "T_before": T_patch,
-                })
+                saved.append(
+                    {
+                        "idx": idx.item(),
+                        "y_min": y_min,
+                        "y_max": y_max,
+                        "x_min": x_min,
+                        "x_max": x_max,
+                        "T_before": T_patch,
+                    }
+                )
 
         ctx.save_for_backward(
-            means2D, cov2D, colors, opacities, z_depth, visible,
-            inv_a, inv_b, inv_d, det,
+            means2D,
+            cov2D,
+            colors,
+            opacities,
+            z_depth,
+            visible,
+            inv_a,
+            inv_b,
+            inv_d,
+            det,
         )
         ctx.saved_splat_data = saved
         return rendered.permute(2, 0, 1)
@@ -105,8 +117,16 @@ class _SplatRasterize(torch.autograd.Function):
         grad_output: torch.Tensor,
     ) -> tuple:
         (
-            means2D, cov2D, colors, opacities, z_depth, visible,
-            inv_a, inv_b, inv_d, det,
+            means2D,
+            cov2D,
+            colors,
+            opacities,
+            z_depth,
+            visible,
+            inv_a,
+            inv_b,
+            inv_d,
+            det,
         ) = ctx.saved_tensors
         saved = ctx.saved_splat_data
         img_h, img_w = ctx.img_h, ctx.img_w
@@ -153,14 +173,13 @@ class _SplatRasterize(torch.autograd.Function):
             )
             dl_dalpha_patch = (c_sum - dLdT[y_min:y_max, x_min:x_max]) * T_before
 
-            grad_colors[idx] = (
-                dLdC[y_min:y_max, x_min:x_max] * T_before * alpha_3d.detach()
-            ).sum(dim=(0, 1))
-
-            dLdT[y_min:y_max, x_min:x_max] = (
-                c_sum * alpha_3d.detach()
-                + dLdT[y_min:y_max, x_min:x_max] * (1.0 - alpha_3d.detach())
+            grad_colors[idx] = (dLdC[y_min:y_max, x_min:x_max] * T_before * alpha_3d.detach()).sum(
+                dim=(0, 1)
             )
+
+            dLdT[y_min:y_max, x_min:x_max] = c_sum * alpha_3d.detach() + dLdT[
+                y_min:y_max, x_min:x_max
+            ] * (1.0 - alpha_3d.detach())
 
             dl_dalpha_flat = dl_dalpha_patch.squeeze(-1)
             dl_dgauss = dl_dalpha_flat * opacities[idx]
@@ -170,12 +189,13 @@ class _SplatRasterize(torch.autograd.Function):
             dgauss_dmaha = -0.5 * gauss.detach()
             dl_dmaha = dl_dgauss * dgauss_dmaha
 
-            dmaha_dx = 2 * inv_a[idx] * diff[..., 0].detach() + (
-                inv_b[idx] + cov2D[idx, 1, 0] / det[idx]
-            ) * diff[..., 1].detach()
-            dmaha_dy = (
-                inv_b[idx] + cov2D[idx, 1, 0] / det[idx]
-            ) * diff[..., 0].detach() + 2 * inv_d[idx] * diff[..., 1].detach()
+            dmaha_dx = (
+                2 * inv_a[idx] * diff[..., 0].detach()
+                + (inv_b[idx] + cov2D[idx, 1, 0] / det[idx]) * diff[..., 1].detach()
+            )
+            dmaha_dy = (inv_b[idx] + cov2D[idx, 1, 0] / det[idx]) * diff[
+                ..., 0
+            ].detach() + 2 * inv_d[idx] * diff[..., 1].detach()
 
             grad_means2D[idx, 0] = -(dl_dmaha * dmaha_dx).sum()
             grad_means2D[idx, 1] = -(dl_dmaha * dmaha_dy).sum()
@@ -196,26 +216,34 @@ class _SplatRasterize(torch.autograd.Function):
 
             grad_cov2D[idx, 0, 0] = (
                 dl_dinv_d * (-c_val * d_val2 / det_sq)
-                + dl_dinv_a * (-d_val2 ** 2 / det_sq)
+                + dl_dinv_a * (-(d_val2**2) / det_sq)
                 + dl_dcombined * (-d_val2 * tmp_cross / det_sq)
             )
             grad_cov2D[idx, 0, 1] = (
                 dl_dinv_d * (a_val * c_val / det_sq)
                 + dl_dinv_a * (c_val * d_val2 / det_sq)
-                + dl_dcombined * ((-a_val * d_val2 + c_val ** 2) / det_sq)
+                + dl_dcombined * ((-a_val * d_val2 + c_val**2) / det_sq)
             )
             grad_cov2D[idx, 1, 0] = (
                 dl_dinv_d * (a_val * b_val / det_sq)
                 + dl_dinv_a * (b_val * d_val2 / det_sq)
-                + dl_dcombined * ((-b_val ** 2 + a_val * d_val2) / det_sq)
+                + dl_dcombined * ((-(b_val**2) + a_val * d_val2) / det_sq)
             )
             grad_cov2D[idx, 1, 1] = (
-                dl_dinv_d * (-a_val ** 2 / det_sq)
-                + dl_dinv_a * ((a_val * d_val2 - b_val * c_val - d_val2 ** 2) / det_sq)
+                dl_dinv_d * (-(a_val**2) / det_sq)
+                + dl_dinv_a * ((a_val * d_val2 - b_val * c_val - d_val2**2) / det_sq)
                 + dl_dcombined * (-a_val * tmp_cross / det_sq)
             )
 
         return (
-            grad_means2D, grad_cov2D, grad_colors, grad_opacities,
-            None, None, None, None, None, None,
+            grad_means2D,
+            grad_cov2D,
+            grad_colors,
+            grad_opacities,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         )
