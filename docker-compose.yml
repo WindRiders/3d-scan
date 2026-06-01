@@ -13,7 +13,7 @@ services:
     image: 3d-scan:${TAG:-latest}
     restart: unless-stopped
     ports:
-      - "${PORT:-8080}:8080"
+      - "${PORT:-8080}:8000"
     environment:
       - OPENBLAS_NUM_THREADS=4
       - HF_ENDPOINT=https://hf-mirror.com
