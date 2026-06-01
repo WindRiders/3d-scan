@@ -10,9 +10,14 @@ import trimesh
 
 from src.postprocess import (
     _count_degenerate_faces,
+    _detect_overhang,
+    _estimate_min_wall_thickness,
+    _from_o3d,
+    _to_o3d,
     clean_mesh_full,
     fill_holes_robust,
     fix_normals,
+    isotropic_remesh,
     remove_floating_pieces,
     validate_mesh,
     wall_thickness_report,
@@ -119,3 +124,70 @@ def test_count_degenerate_faces() -> None:
     faces = np.array([[0, 1, 2], [0, 0, 0]], dtype=np.int32)  # 第二个是退化面
     mesh = trimesh.Trimesh(vertices=verts, faces=faces)
     assert _count_degenerate_faces(mesh) >= 1
+
+
+def test_estimate_min_wall_thickness_sphere(sphere_mesh: Path) -> None:
+    """球面网格壁厚估算返回正值."""
+    mesh = trimesh.load(str(sphere_mesh), force="mesh")
+    result = _estimate_min_wall_thickness(mesh)
+    assert result is not None
+    assert result > 0
+
+
+def test_detect_overhang() -> None:
+    """悬垂检测：平面法线朝下的面应被统计."""
+    # 一个朝下的平面（法线 -Z）
+    verts = np.array([
+        [0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0],
+    ], dtype=np.float64)
+    faces = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int32)
+    mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+    mesh.fix_normals()
+    ratio = _detect_overhang(mesh, angle_threshold=45)
+    assert 0 <= ratio <= 1
+
+
+def test_to_o3d_from_o3d() -> None:
+    """trimesh ↔ Open3D 转换往返."""
+    orig = trimesh.creation.icosphere(subdivisions=2, radius=5.0)
+    o3d_mesh = _to_o3d(orig)
+    restored = _from_o3d(o3d_mesh)
+    assert len(restored.faces) == len(orig.faces)
+    assert len(restored.vertices) == len(orig.vertices)
+
+
+def test_validate_mesh_pointcloud(tmp_path: Path) -> None:
+    """点云加载为无面网格，验证结果应报告问题."""
+    p = tmp_path / "points.ply"
+    pc = trimesh.points.PointCloud(np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float64))
+    pc.export(str(p))
+    result = validate_mesh(p)
+    assert not result.is_watertight
+    assert not result.is_printable
+
+
+def test_remove_floating_pieces_multi_component(tmp_path: Path) -> None:
+    """多连通分量网格清除漂浮碎片."""
+    main = trimesh.creation.icosphere(subdivisions=2, radius=10.0)
+    fragment = trimesh.creation.icosphere(subdivisions=0, radius=1.0)
+    fragment.apply_translation([20, 0, 0])
+    combined = trimesh.util.concatenate([main, fragment])
+    # 碎片仅占 20/(320+20) ≈ 5.8%，用 min_component_ratio=0.1 清除
+    src = tmp_path / "combined.ply"
+    combined.export(str(src))
+    out = tmp_path / "cleaned.ply"
+    remove_floating_pieces(src, out, min_component_ratio=0.1)
+    cleaned = trimesh.load(str(out), force="mesh")
+    assert len(cleaned.faces) < len(combined.faces)
+
+
+def test_isotropic_remesh(sphere_mesh: Path, tmp_path: Path) -> None:
+    """重网格化生成有效输出."""
+    out = tmp_path / "remeshed.ply"
+    result = isotropic_remesh(sphere_mesh, out, target_edge_length=1.0, iterations=3)
+    assert result == out
+    assert out.exists()
+    assert out.stat().st_size > 0
+    # 重网格化后的网格应可加载
+    mesh = trimesh.load(str(out), force="mesh")
+    assert len(mesh.faces) > 0

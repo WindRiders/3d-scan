@@ -17,6 +17,8 @@ from src.decompose import (
     cut_mesh_with_plane,
     decompose,
     export_parts,
+    render_views,
+    segment_by_graph_cut,
     segment_semantic,
 )
 
@@ -124,3 +126,50 @@ def test_export_parts(bunny_mesh: trimesh.Trimesh, tmp_path: Path) -> None:
     for p in paths:
         assert p.exists()
         assert p.stat().st_size > 0
+
+
+def test_segment_semantic_invalid_method(bunny_mesh: trimesh.Trimesh) -> None:
+    """不支持的分割方法抛 ValueError."""
+    with pytest.raises(ValueError, match="不支持的分割方法"):
+        segment_semantic(bunny_mesh, method="invalid_method")
+
+
+def test_segment_by_graph_cut_no_adjacency() -> None:
+    """无邻接面的网格直接返回原标签."""
+    verts = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float64)
+    faces = np.array([[0, 1, 2]], dtype=np.int32)
+    mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+    labels = np.array([0])
+    result = segment_by_graph_cut(mesh, labels)
+    np.testing.assert_array_equal(result, labels)
+
+
+def test_render_views(bunny_mesh: trimesh.Trimesh) -> None:
+    """多视图渲染生成图像列表."""
+    pytest.importorskip("pyglet")
+    images = render_views(bunny_mesh, num_views=4, resolution=(64, 64))
+    assert len(images) == 4
+    for img in images:
+        assert isinstance(img, np.ndarray)
+        assert img.shape[0] == 64
+        assert img.shape[1] == 64
+
+
+def test_cut_plane_no_fill_holes(bunny_mesh: trimesh.Trimesh) -> None:
+    """切割不填充孔洞."""
+    plane = CutPlane(
+        point=np.array([0.0, 0.0, 6.0]),
+        normal=np.array([0.0, 0.0, 1.0]),
+    )
+    top, bottom = cut_mesh_with_plane(bunny_mesh, plane, fill_holes=False)
+    assert len(top.faces) > 0
+    assert len(bottom.faces) > 0
+
+
+def test_export_parts_skips_empty(bunny_mesh: trimesh.Trimesh, tmp_path: Path) -> None:
+    """空面模块被跳过."""
+    decomp = decompose(bunny_mesh, method="convexity", num_parts=2)
+    # 将一个模块的 part_id 改为不存在的值，使其提取时得到空网格
+    decomp.parts[0].part_id = 999
+    paths = export_parts(decomp, tmp_path / "parts")
+    assert len(paths) < len(decomp.parts)

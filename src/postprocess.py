@@ -67,6 +67,8 @@ def validate_mesh(mesh_path: Path) -> MeshValidation:
 
     # 包围盒
     bbox = tm.bounds
+    if bbox is None:
+        bbox = np.array([[0, 0, 0], [0, 0, 0]], dtype=np.float64)
     bbox_size = (
         float(bbox[1][0] - bbox[0][0]),
         float(bbox[1][1] - bbox[0][1]),
@@ -116,15 +118,27 @@ def _estimate_min_wall_thickness(mesh: trimesh.Trimesh) -> float | None:
         normals = mesh.face_normals[face_idx]
 
         # 每条射线求另一侧交点
-        hit_points, _, hit_face = mesh.ray.intersects_location(
+        hit_points, hit_ray_idx, _ = mesh.ray.intersects_location(
             samples + normals * 0.001,  # 微偏移避免自交
             -normals,
         )
         if len(hit_points) == 0:
             return None
 
-        distances = np.linalg.norm(hit_points - samples[: len(hit_points)], axis=1)
-        return float(np.min(distances[distances > 0.01]))  # 过滤自身
+        # 每条射线可能击中多次（入口和出口），取最大距离差作为壁厚
+        thicknesses: list[float] = []
+        for i in range(len(samples)):
+            mask = hit_ray_idx == i
+            if mask.sum() >= 2:
+                pts = hit_points[mask]
+                d = np.linalg.norm(pts - samples[i], axis=1)
+                t = float(d.max() - d.min())
+                if t > 0.01:
+                    thicknesses.append(t)
+
+        if not thicknesses:
+            return None
+        return float(np.min(thicknesses))
     except Exception:
         return None
 
