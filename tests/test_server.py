@@ -184,9 +184,7 @@ async def test_download_file_not_found(client: AsyncClient, tmp_path: Path) -> N
     """任务存在但文件不存在返回 404."""
     img = _make_test_image(tmp_path)
     with open(img, "rb") as f:
-        r = await client.post(
-            "/api/tasks", files={"files": ("test.jpg", f, "image/jpeg")}
-        )
+        r = await client.post("/api/tasks", files={"files": ("test.jpg", f, "image/jpeg")})
     tid = r.json()["task_id"]
     r = await client.get(f"/api/tasks/{tid}/download/nonexistent.stl")
     assert r.status_code == 404
@@ -204,9 +202,7 @@ async def test_get_task_success(client: AsyncClient, tmp_path: Path) -> None:
     """查询已创建的任务返回完整信息."""
     img = _make_test_image(tmp_path)
     with open(img, "rb") as f:
-        r = await client.post(
-            "/api/tasks", files={"files": ("test.jpg", f, "image/jpeg")}
-        )
+        r = await client.post("/api/tasks", files={"files": ("test.jpg", f, "image/jpeg")})
     tid = r.json()["task_id"]
     r = await client.get(f"/api/tasks/{tid}")
     assert r.status_code == 200

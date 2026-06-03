@@ -137,9 +137,15 @@ def test_estimate_min_wall_thickness_sphere(sphere_mesh: Path) -> None:
 def test_detect_overhang() -> None:
     """悬垂检测：平面法线朝下的面应被统计."""
     # 一个朝下的平面（法线 -Z）
-    verts = np.array([
-        [0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0],
-    ], dtype=np.float64)
+    verts = np.array(
+        [
+            [0, 0, 0],
+            [10, 0, 0],
+            [10, 10, 0],
+            [0, 10, 0],
+        ],
+        dtype=np.float64,
+    )
     faces = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int32)
     mesh = trimesh.Trimesh(vertices=verts, faces=faces)
     mesh.fix_normals()
