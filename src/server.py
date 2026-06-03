@@ -108,7 +108,12 @@ async def health() -> HealthResponse:
 # ── 任务 CRUD ──
 
 
-@app.post("/api/tasks", response_model=TaskCreateResponse, tags=[TASK_TAG], summary="创建任务并上传图片")
+@app.post(
+    "/api/tasks",
+    response_model=TaskCreateResponse,
+    tags=[TASK_TAG],
+    summary="创建任务并上传图片",
+)
 async def create_task(files: list[UploadFile] = File(...)):
     if len(files) > cfg.server.max_images_per_task:
         raise HTTPException(400, f"最多 {cfg.server.max_images_per_task} 张")
@@ -138,7 +143,12 @@ async def get_task(tid: str):
     return t
 
 
-@app.post("/api/tasks/{tid}/process", response_model=TaskProcessResponse, tags=[TASK_TAG], summary="执行重建流水线")
+@app.post(
+    "/api/tasks/{tid}/process",
+    response_model=TaskProcessResponse,
+    tags=[TASK_TAG],
+    summary="执行重建流水线",
+)
 async def process_task(tid: str, decompose_parts: int = 0, refine_3dgs: int = 0):
     t = tasks.get(tid)
     if not t:
@@ -234,7 +244,12 @@ async def download_file(tid: str, filename: str):
     raise HTTPException(404, "文件不存在")
 
 
-@app.delete("/api/tasks/{tid}", response_model=TaskDeleteResponse, tags=[TASK_TAG], summary="删除任务和文件")
+@app.delete(
+    "/api/tasks/{tid}",
+    response_model=TaskDeleteResponse,
+    tags=[TASK_TAG],
+    summary="删除任务和文件",
+)
 async def delete_task(tid: str):
     t = tasks.pop(tid, None)
     if not t:
