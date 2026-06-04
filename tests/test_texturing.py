@@ -117,3 +117,66 @@ def test_unwrap_uv_projection_fallback(cube_mesh: Path, tmp_path: Path, monkeypa
     assert isinstance(tm.visual, trimesh.visual.TextureVisuals)
     assert tm.visual.uv is not None
     assert len(tm.visual.uv) > 0
+
+
+def test_unwrap_uv_not_trimesh(tmp_path: Path, monkeypatch) -> None:
+    """非 Trimesh 网格传入 unwrap_uv 触发 ValueError."""
+    pc = trimesh.points.PointCloud(np.array([[0.0, 0.0, 0.0]]))
+    monkeypatch.setattr("trimesh.load", lambda *a, **kw: pc)
+    with pytest.raises(ValueError, match="不是有效的网格文件"):
+        unwrap_uv(tmp_path / "fake.ply", tmp_path / "out.obj")
+
+
+def test_bake_ao_not_trimesh(tmp_path: Path, monkeypatch) -> None:
+    """非 Trimesh 网格传入 bake_ambient_occlusion 触发 ValueError."""
+    pc = trimesh.points.PointCloud(np.array([[0.0, 0.0, 0.0]]))
+    monkeypatch.setattr("trimesh.load", lambda *a, **kw: pc)
+    with pytest.raises(ValueError, match="不是有效的网格文件"):
+        bake_ambient_occlusion(tmp_path / "fake.ply", tmp_path / "out.ply")
+
+
+def test_projection_unwrap_dominant_x(tmp_path: Path, monkeypatch) -> None:
+    """X 轴主导法线触发 dominant==0 分支."""
+    monkeypatch.setattr("src.texturing._has_xatlas", False)
+    # 创建法线主要指向 X 轴的平面（Y-Z 平面）
+    verts = np.array([[0, 0, 0], [0, 1, 0], [0, 1, 1], [0, 0, 1]], dtype=np.float32)
+    faces = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int32)
+    tm = trimesh.Trimesh(vertices=verts, faces=faces)
+    x_path = tmp_path / "x_dominant.ply"
+    tm.export(str(x_path))
+    output = tmp_path / "x.obj"
+    result = unwrap_uv(x_path, output, tex_resolution=512)
+    assert result.exists()
+
+
+def test_projection_unwrap_dominant_y(tmp_path: Path, monkeypatch) -> None:
+    """Y 轴主导法线触发 dominant==1 分支."""
+    monkeypatch.setattr("src.texturing._has_xatlas", False)
+    # 创建法线主要指向 Y 轴的平面（X-Z 平面）
+    verts = np.array([[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], dtype=np.float32)
+    faces = np.array([[0, 1, 2], [0, 2, 3]], dtype=np.int32)
+    tm = trimesh.Trimesh(vertices=verts, faces=faces)
+    y_path = tmp_path / "y_dominant.ply"
+    tm.export(str(y_path))
+    output = tmp_path / "y.obj"
+    result = unwrap_uv(y_path, output, tex_resolution=512)
+    assert result.exists()
+
+
+def test_ao_with_occlusion(cube_mesh: Path, tmp_path: Path) -> None:
+    """两个紧邻的立方体——光线投射命中遮挡."""
+    mesh = trimesh.creation.box(extents=[10, 10, 10])
+    mesh2 = trimesh.creation.box(extents=[10, 10, 10])
+    mesh2.apply_translation([3, 0, 0])  # 紧邻 mesh1
+    combined = trimesh.util.concatenate([mesh, mesh2])
+    merged_path = tmp_path / "merged.ply"
+    combined.export(str(merged_path))
+    output = tmp_path / "ao.ply"
+    result = bake_ambient_occlusion(merged_path, output, samples=8)
+    assert result.exists()
+    tm = trimesh.load(str(result), force="mesh")
+    colors = tm.visual.vertex_colors
+    assert colors is not None
+    # 遮挡面（内侧）AO 值应低于外侧
+    ao_values = colors[:, 0].astype(float) / 255.0
+    assert ao_values.min() < 0.99

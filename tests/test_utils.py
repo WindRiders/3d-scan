@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 
+from pathlib import Path
+
 from src.utils import (
+    ensure_dir,
     estimate_point_count,
     image_hash,
     normalize_points,
@@ -50,3 +53,10 @@ def test_estimate_point_count() -> None:
     """估算采样点数."""
     count = estimate_point_count(density_mm=1.0, bbox_diag_mm=100)
     assert 400_000 < count < 600_000  # 约 523k
+
+
+def test_ensure_dir(tmp_path: Path) -> None:
+    """创建目录（含父目录）并返回路径."""
+    p = ensure_dir(tmp_path / "a" / "b" / "c")
+    assert p.exists()
+    assert p.is_dir()

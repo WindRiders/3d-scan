@@ -176,3 +176,22 @@ def test_export_parts_skips_empty(bunny_mesh: trimesh.Trimesh, tmp_path: Path) -
     decomp.parts[0].part_id = 999
     paths = export_parts(decomp, tmp_path / "parts")
     assert len(paths) < len(decomp.parts)
+
+
+def test_cut_mesh_fill_holes_exception(bunny_mesh: trimesh.Trimesh, monkeypatch) -> None:
+    """fill_holes 抛出异常时被静默捕获."""
+    monkeypatch.setattr("trimesh.repair.fill_holes", lambda m: (_ for _ in ()).throw(RuntimeError))
+    plane = CutPlane(np.array([0.0, 0.0, 6.0]), np.array([0.0, 0.0, 1.0]))
+    top, bottom = cut_mesh_with_plane(bunny_mesh, plane, fill_holes=True)
+    assert len(top.faces) > 0
+    assert len(bottom.faces) > 0
+
+
+def test_render_views_mocked(bunny_mesh: trimesh.Trimesh, monkeypatch) -> None:
+    """模拟场景渲染返回 dummy 图像."""
+    mock_img = np.zeros((64, 64, 4), dtype=np.uint8)
+    monkeypatch.setattr("trimesh.scene.scene.Scene.save_image", lambda *a, **kw: mock_img)
+    images = render_views(bunny_mesh, num_views=4, resolution=(64, 64))
+    assert len(images) == 4
+    for img in images:
+        assert img.shape == (64, 64, 4)
