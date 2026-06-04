@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
+import open3d as o3d
 import pytest
 import trimesh
 
@@ -333,10 +334,6 @@ def test_validate_mesh_volume_exception(tmp_path: Path) -> None:
 
 def test_fill_holes_o3d_success(tmp_path: Path) -> None:
     """Open3D fill_holes 成功路径覆盖（lines 171-172）."""
-    from unittest.mock import MagicMock
-
-    import open3d as o3d
-
     box = trimesh.creation.box(extents=[10, 10, 10])
     src = tmp_path / "box.stl"
     box.export(str(src))
@@ -372,3 +369,12 @@ def test_fix_normals_invalid(tmp_path: Path) -> None:
     with patch("trimesh.load", return_value=trimesh.Scene()):
         with pytest.raises(ValueError, match="不是有效的网格文件"):
             fix_normals(p, tmp_path / "out.ply")
+
+
+def test_wall_thickness_report_invalid(tmp_path: Path) -> None:
+    """非网格文件触发 wall_thickness_report 的 ValueError（line 258）."""
+    p = tmp_path / "test.stl"
+    trimesh.creation.box(extents=[1, 1, 1]).export(str(p))
+    with patch("trimesh.load", return_value=trimesh.Scene()):
+        with pytest.raises(ValueError, match="不是有效的网格文件"):
+            wall_thickness_report(p)

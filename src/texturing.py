@@ -24,35 +24,38 @@ def unwrap_uv(
     output_path: Path,
     tex_resolution: int = 2048,
 ) -> Path:
-    """xatlas 自动 UV 展开，输出带 UV 坐标的网格."""
+    """UV 展开：xatlas 优先，否则使用投影回退."""
     tm = trimesh.load(str(mesh_path), force="mesh")
     if not isinstance(tm, trimesh.Trimesh):
         raise ValueError("不是有效的网格文件")
 
-    verts = np.asarray(tm.vertices, dtype=np.float32)
-    faces = np.asarray(tm.faces, dtype=np.int32)
+    if _has_xatlas:
+        verts = np.asarray(tm.vertices, dtype=np.float32)
+        faces = np.asarray(tm.faces, dtype=np.int32)
 
-    atlas = xatlas.Atlas()
-    atlas.add_mesh(verts, faces)
-    chart_options = xatlas.ChartOptions()
-    pack_options = xatlas.PackOptions()
-    pack_options.resolution = tex_resolution
-    atlas.generate(chart_options=chart_options, pack_options=pack_options)
+        atlas = xatlas.Atlas()
+        atlas.add_mesh(verts, faces)
+        chart_options = xatlas.ChartOptions()
+        pack_options = xatlas.PackOptions()
+        pack_options.resolution = tex_resolution
+        atlas.generate(chart_options=chart_options, pack_options=pack_options)
 
-    vmapping, indices, uvs = atlas.get_mesh(0)
-    logger.info(
-        "UV 展开完成: %d 顶点, %d UV 坐标, %d 面",
-        len(vmapping),
-        len(uvs),
-        len(indices),
-    )
+        vmapping, indices, uvs = atlas.get_mesh(0)
+        logger.info(
+            "UV 展开完成 (xatlas): %d 顶点, %d UV 坐标, %d 面",
+            len(vmapping),
+            len(uvs),
+            len(indices),
+        )
 
-    # 构建带 UV 的输出网格
-    out_verts = np.asarray(verts[vmapping])
-    out_faces = np.asarray(indices).reshape(-1, 3)
-    out_uvs = np.asarray(uvs[:, :2])
+        out_verts = np.asarray(verts[vmapping])
+        out_faces = np.asarray(indices).reshape(-1, 3)
+        out_uvs = np.asarray(uvs[:, :2])
+        tm_out = trimesh.Trimesh(vertices=out_verts, faces=out_faces)
+    else:
+        logger.info("xatlas 未安装，使用投影回退 UV")
+        tm_out, out_uvs = _projection_unwrap(tm, tex_resolution)
 
-    tm_out = trimesh.Trimesh(vertices=out_verts, faces=out_faces)
     tm_out.visual = trimesh.visual.TextureVisuals(uv=out_uvs)
 
     # OBJ 格式保留 UV 坐标, PLY 会丢失
@@ -60,6 +63,50 @@ def unwrap_uv(
     tm_out.export(str(obj_path))
     logger.info("UV 展开导出: %s", obj_path)
     return obj_path
+
+
+def _projection_unwrap(
+    tm: trimesh.Trimesh,
+    tex_resolution: int = 2048,
+) -> tuple[trimesh.Trimesh, np.ndarray]:
+    """投影回退 UV 展开：基于平均法线选择最佳投影平面."""
+    normals = np.asarray(tm.vertex_normals, dtype=np.float32)
+    avg_normal = normals.mean(axis=0)
+    norm = np.linalg.norm(avg_normal)
+    if norm > 1e-8:
+        avg_normal /= norm
+    else:
+        avg_normal = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+
+    verts = np.asarray(tm.vertices, dtype=np.float32)
+
+    # 基于法线主导方向选择投影轴
+    dominant = int(np.argmax(np.abs(avg_normal)))
+    if dominant == 0:
+        u, v_values = verts[:, 1], verts[:, 2]
+    elif dominant == 1:
+        u, v_values = verts[:, 0], verts[:, 2]
+    else:
+        u, v_values = verts[:, 0], verts[:, 1]
+
+    # 归一化到 [0, 1]
+    u_min, u_max = u.min(), u.max()
+    v_min, v_max = v_values.min(), v_values.max()
+    u_range = u_max - u_min if u_max > u_min else 1.0
+    v_range = v_max - v_min if v_max > v_min else 1.0
+    uv = np.column_stack([
+        (u - u_min) / u_range,
+        (v_values - v_min) / v_range,
+    ]).astype(np.float32)
+
+    logger.info(
+        "UV 展开完成 (投影): %d 顶点, 主导轴=%d, u_range=%.1f, v_range=%.1f",
+        len(uv),
+        dominant,
+        u_range,
+        v_range,
+    )
+    return trimesh.Trimesh(vertices=verts, faces=tm.faces.copy()), uv
 
 
 def bake_vertex_color(

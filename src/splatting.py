@@ -198,8 +198,14 @@ def run_gaussian_splatting_refinement(
     # 加载点云
     pts = np.load(pointcloud_path)
     if pts.shape[1] < 6:
-        logger.warning("点云无颜色通道，跳过 3DGS")
-        return _placeholder_refine(pointcloud_path, work_dir)
+        if len(image_paths) == 0:
+            logger.warning("点云无颜色且无训练图像，跳过 3DGS")
+            return _placeholder_refine(pointcloud_path, work_dir)
+        logger.info("点云无颜色通道，基于位置生成伪彩色")
+        xyz = pts[:, :3]
+        rng = np.maximum(xyz.max(axis=0) - xyz.min(axis=0), 1e-8)
+        colors = (xyz - xyz.min(axis=0)) / rng
+        pts = np.concatenate([pts, colors.astype(np.float32)], axis=1)
 
     # 初始化 Gaussian
     model = init_gaussians_from_pointcloud(pts, device=device)

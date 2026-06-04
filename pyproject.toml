@@ -31,6 +31,9 @@ dev = [
     "ruff>=0.3",
 ]
 
+[project.scripts]
+3d-scan = "src.__main__:main"
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"
