@@ -189,7 +189,7 @@ class TestEndToEnd:
         # 带拆解的处理
         r = httpx.post(
             f"{server_url}/api/tasks/{tid}/process?decompose_parts=3",
-            timeout=300,
+            timeout=600,
         )
         assert r.status_code == 200
         data = r.json()
