@@ -25,7 +25,9 @@ async def test_index_html_content(client: AsyncClient) -> None:
     assert 'id="drop-zone"' in html
     assert 'id="viewer-canvas"' in html
     assert 'id="btn-upload"' in html
-    assert 'id="btn-download-all"' in html
+    assert 'id="btn-download-stl"' in html
+    assert 'id="btn-download-ply"' in html
+    assert 'id="decompose-select"' in html
     assert 'id="part-list"' in html
     assert 'id="progress-bar"' in html
     assert 'id="toast-container"' in html

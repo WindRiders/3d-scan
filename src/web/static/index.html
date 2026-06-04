@@ -33,6 +33,13 @@
         <div id="upload-actions" style="display:none">
           <span id="file-count">0 张</span>
           <button id="btn-clear-files" class="btn btn-sm" title="清除已选图片">清除</button>
+          <select id="decompose-select" class="btn btn-sm">
+            <option value="0">不拆解</option>
+            <option value="2">2 模块</option>
+            <option value="3" selected>3 模块</option>
+            <option value="4">4 模块</option>
+            <option value="5">5 模块</option>
+          </select>
           <button id="btn-upload" class="btn btn-primary">开始重建</button>
         </div>
       </section>
@@ -74,7 +81,8 @@
       <section class="panel-card" id="export-section">
         <h2>导出</h2>
         <div id="export-buttons">
-          <button class="btn btn-primary" id="btn-download-all" disabled>下载全部 STL</button>
+          <button class="btn btn-primary" id="btn-download-stl" disabled>下载 STL</button>
+          <button class="btn" id="btn-download-ply" disabled>下载 PLY</button>
           <button class="btn" id="btn-download-part" disabled>下载选中模块</button>
         </div>
         <div id="export-status"></div>

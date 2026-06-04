@@ -26,7 +26,10 @@ async function uploadImages(files) {
   return api('/tasks', { method: 'POST', body: fd });
 }
 
-async function processTask(id) { return api(`/tasks/${id}/process`, { method: 'POST' }); }
+async function processTask(id, decomposeParts = 0) {
+  const qs = decomposeParts > 0 ? `?decompose_parts=${decomposeParts}` : '';
+  return api(`/tasks/${id}/process${qs}`, { method: 'POST' });
+}
 
 // ── Toast 通知 ────────────────────────────────────────────
 
@@ -72,6 +75,62 @@ function loadTaskState() {
 
 function clearTaskState() {
   try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+}
+
+const HISTORY_KEY = '3dscan_history';
+const MAX_HISTORY = 20;
+
+function addTaskToHistory(taskId, decomposeParts = 0) {
+  try {
+    const history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    const entry = { taskId, decomposeParts, ts: Date.now() };
+    const filtered = history.filter(h => h.taskId !== taskId);
+    filtered.unshift(entry);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(filtered.slice(0, MAX_HISTORY)));
+    renderTaskHistory(filtered.slice(0, MAX_HISTORY));
+  } catch { /* ignore */ }
+}
+
+function loadTaskHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+  } catch { return []; }
+}
+
+function renderTaskHistory(history) {
+  const container = document.getElementById('task-list');
+  if (!history || history.length === 0) {
+    container.innerHTML = '<p class="empty">暂无任务</p>';
+    return;
+  }
+  container.innerHTML = history.map(h => {
+    const dt = new Date(h.ts);
+    const time = `${dt.getMonth() + 1}/${dt.getDate()} ${dt.getHours()}:${String(dt.getMinutes()).padStart(2, '0')}`;
+    return `<div class="task-item" data-task-id="${h.taskId}">
+      <span class="status-dot ${h.taskId === currentTaskId ? 'processing' : 'done'}"></span>
+      <span>${h.taskId.slice(0, 8)}</span>
+      <span style="font-size:10px;color:var(--text-dim)">${h.decomposeParts > 0 ? h.decomposeParts + '模块' : '整体'}</span>
+      <span style="margin-left:auto;font-size:11px;color:var(--text-dim)">${time}</span>
+    </div>`;
+  }).join('');
+
+  container.querySelectorAll('.task-item').forEach(item => {
+    item.addEventListener('click', async () => {
+      const tid = item.dataset.taskId;
+      if (tid === currentTaskId) return;
+      currentTaskId = tid;
+      saveTaskState({ taskId: tid });
+      showToast('切换到任务: ' + tid.slice(0, 8), 'info', 2000);
+      try {
+        await viewer.loadSTL(`${API}/tasks/${tid}/download/model.stl`);
+        document.getElementById('btn-download-stl').disabled = false;
+        document.getElementById('btn-download-ply').disabled = false;
+        updateTaskStatus('查看历史任务');
+      } catch {
+        showToast('模型加载失败，任务可能已过期', 'warning');
+      }
+    });
+  });
 }
 
 // ── Three.js Viewer ──────────────────────────────────────
@@ -282,6 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupUpload();
   setupViewerControls();
   setupExportButtons();
+  renderTaskHistory(loadTaskHistory());
   pollTasks();
   restoreTaskFromStorage();
 });
@@ -343,11 +403,13 @@ function setupUpload() {
     try {
       const { task_id } = await uploadImages(files);
       currentTaskId = task_id;
-      saveTaskState({ taskId: task_id });
+      const decomposeParts = parseInt(document.getElementById('decompose-select').value, 10);
+      saveTaskState({ taskId: task_id, decomposeParts });
       setProgress(true, 30);
-      const result = await processTask(task_id);
+      const result = await processTask(task_id, decomposeParts);
       setProgress(false, 0);
       handleTaskResult(task_id, result);
+      addTaskToHistory(task_id, decomposeParts);
     } catch (e) {
       setProgress(false, 0);
       showToast('处理失败: ' + e.message, 'error');
@@ -377,11 +439,20 @@ function setupViewerControls() {
 // ── 导出 ──────────────────────────────────────────────────
 
 function setupExportButtons() {
-  document.getElementById('btn-download-all').addEventListener('click', () => {
+  document.getElementById('btn-download-stl').addEventListener('click', () => {
     if (!currentTaskId) return;
-    document.getElementById('export-status').textContent = '准备下载...';
+    const es = document.getElementById('export-status');
+    es.textContent = '下载 STL...';
     window.open(`${API}/tasks/${currentTaskId}/download/model.stl`, '_blank');
-    document.getElementById('export-status').textContent = '已触发下载';
+    es.textContent = '已触发下载';
+  });
+
+  document.getElementById('btn-download-ply').addEventListener('click', () => {
+    if (!currentTaskId) return;
+    const es = document.getElementById('export-status');
+    es.textContent = '下载 PLY...';
+    window.open(`${API}/tasks/${currentTaskId}/download/model.ply`, '_blank');
+    es.textContent = '已触发下载';
   });
 
   document.getElementById('btn-download-part').addEventListener('click', () => {
@@ -408,7 +479,8 @@ function handleTaskResult(taskId, result) {
       updateViewerInfo('-', '-', result.parts.length);
     }
 
-    document.getElementById('btn-download-all').disabled = false;
+    document.getElementById('btn-download-stl').disabled = false;
+    document.getElementById('btn-download-ply').disabled = false;
   }
 }
 
@@ -445,7 +517,8 @@ function renderPartList(parts) {
     });
     container.appendChild(div);
   });
-  document.getElementById('btn-download-all').disabled = false;
+  document.getElementById('btn-download-stl').disabled = false;
+    document.getElementById('btn-download-ply').disabled = false;
 }
 
 // ── 进度条 ────────────────────────────────────────────────
@@ -492,7 +565,8 @@ async function restoreTaskFromStorage() {
     updateTaskStatus(task.status);
     if (task.status === 'done') {
       await viewer.loadSTL(`${API}/tasks/${state.taskId}/download/model.stl`);
-      document.getElementById('btn-download-all').disabled = false;
+      document.getElementById('btn-download-stl').disabled = false;
+    document.getElementById('btn-download-ply').disabled = false;
     }
   } catch {
     clearTaskState();
