@@ -408,3 +408,29 @@ def test_splat_rasterize_invisible_skipped() -> None:
     assert torch.allclose(out_invis, out_without_g0, atol=1e-5), (
         "visible[0]=False 应与完全移除 gaussian 0 的渲染结果一致"
     )
+
+
+def test_run_gaussian_splatting_no_color_with_images(tmp_path: Path) -> None:
+    """无颜色点云但有训练图片时，自动生成伪彩色并完成训练."""
+    from PIL import Image
+
+    from src.config import ReconstructConfig
+
+    # 仅有 xyz 的点云
+    pts = np.random.RandomState(42).uniform(-1, 1, (100, 3)).astype(np.float32)
+    pts[:, 2] = np.abs(pts[:, 2])
+    pc_path = tmp_path / "pc.npy"
+    np.save(str(pc_path), pts)
+
+    img_paths = []
+    for i in range(2):
+        arr = np.random.RandomState(42 + i).randint(0, 255, (64, 64, 3), dtype=np.uint8)
+        p = tmp_path / f"img_{i}.png"
+        Image.fromarray(arr).save(str(p))
+        img_paths.append(p)
+
+    cfg = ReconstructConfig(image_size=64, gaussian_splatting_iterations=20)
+    result = run_gaussian_splatting_refinement(pc_path, img_paths, tmp_path, cfg)
+    assert result.exists()
+    refined = np.load(str(result))
+    assert refined.shape[1] >= 6

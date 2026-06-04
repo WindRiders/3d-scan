@@ -104,3 +104,16 @@ def test_hemisphere_samples_near_z() -> None:
     assert len(samples) == 4
     for d in samples:
         assert np.dot(d, normal) > 0
+
+
+def test_unwrap_uv_projection_fallback(cube_mesh: Path, tmp_path: Path, monkeypatch) -> None:
+    """xatlas 不可用时使用投影 UV 展开回退."""
+    monkeypatch.setattr("src.texturing._has_xatlas", False)
+    output = tmp_path / "unwrapped_fallback.obj"
+    result = unwrap_uv(cube_mesh, output, tex_resolution=1024)
+    assert result.exists()
+    assert result.stat().st_size > 0
+    tm = trimesh.load(str(result), force="mesh")
+    assert isinstance(tm.visual, trimesh.visual.TextureVisuals)
+    assert tm.visual.uv is not None
+    assert len(tm.visual.uv) > 0
