@@ -18,23 +18,32 @@ from PIL import Image
 
 
 def _make_multi_view_images(work_dir: Path, num_views: int = 6) -> list[Path]:
-    """生成模拟多视角图片: 随机纹理 + 视点偏移."""
+    """生成模拟多视角图片: 密集纹理 + 视点偏移."""
     rng = np.random.RandomState(42)
-    w, h = 224, 224
-    # 生成随机彩色纹理背景
-    texture = rng.randint(0, 256, (h * 2, w * 2, 3), dtype=np.uint8)
-    # 画一些几何特征
-    for _ in range(15):
+    w, h = 600, 600
+    # 密集纹理背景（确保通过模糊检查）
+    texture = rng.randint(30, 225, (h * 2, w * 2, 3), dtype=np.uint8)
+    # 叠加高频噪声
+    noise = rng.randint(-20, 20, (h * 2, w * 2, 3), dtype=np.int16)
+    texture = np.clip(texture.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+    # 画大量几何特征（确保 DUSt3R 有足够特征点匹配）
+    for _ in range(30):
         cx, cy = rng.randint(0, w * 2), rng.randint(0, h * 2)
-        radius = rng.randint(10, 40)
+        radius = rng.randint(15, 60)
         color = rng.randint(0, 256, 3).tolist()
         y, x = np.ogrid[: h * 2, : w * 2]
         mask = (x - cx) ** 2 + (y - cy) ** 2 < radius**2
         for c in range(3):
             texture[mask, c] = color[c]
+    # 画一些矩形特征
+    for _ in range(10):
+        rx, ry = rng.randint(0, w * 2 - 50), rng.randint(0, h * 2 - 50)
+        rw, rh = rng.randint(20, 80), rng.randint(20, 80)
+        color = rng.randint(0, 256, 3).tolist()
+        texture[ry : ry + rh, rx : rx + rw] = color
 
     images: list[Path] = []
-    shifts = [(0, 0), (20, 0), (-15, 5), (10, -20), (-20, -10), (5, 15)]
+    shifts = [(0, 0), (40, 0), (-30, 10), (20, -40), (-40, -20), (10, 30)]
 
     for i, (dx, dy) in enumerate(shifts[:num_views]):
         view = texture[
