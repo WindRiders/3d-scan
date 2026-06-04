@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from unittest.mock import patch
+
 import numpy as np
 import open3d as o3d
 import pytest
@@ -141,3 +143,34 @@ def test_fill_holes_success() -> None:
     assert not mesh.is_watertight
     result = fill_holes(mesh, max_radius=5.0)
     assert result.is_watertight
+
+
+def test_load_pointcloud_npy_with_colors(tmp_path: Path) -> None:
+    """加载含 rgb 的 .npy (≥6 列)."""
+    data = np.random.randn(100, 6).astype(np.float32)
+    data[:, :3] *= 10  # 坐标放大
+    data[:, 3:6] = np.abs(data[:, 3:6])  # 颜色 ≥ 0
+    p = tmp_path / "colored.npy"
+    np.save(p, data)
+    pcd = load_pointcloud(p)
+    assert len(pcd.points) == 100
+    assert len(pcd.colors) == 100
+
+
+def test_fill_holes_no_boundary() -> None:
+    """封闭网格无边界时跳过填充."""
+    box = trimesh.creation.box(extents=[10, 10, 10])
+    with patch("trimesh.repair.fill_holes", side_effect=ValueError("无边界")):
+        result = fill_holes(box, max_radius=1.0)
+    assert result.is_watertight
+
+
+def test_voxel_ds_skip_on_too_few(tmp_path: Path) -> None:
+    """降采样后点数过少应跳过."""
+    # 创建小点云，使降采样后 < 1000 点
+    pts = np.random.randn(500, 3).astype(np.float64)
+    pcd_path = tmp_path / "small.npy"
+    np.save(pcd_path, pts)
+    config = MeshConfig(target_faces=100, voxel_size=10.0)
+    ply_path, stl_path = pointcloud_to_mesh(pcd_path, tmp_path / "out", config)
+    assert ply_path.exists()
