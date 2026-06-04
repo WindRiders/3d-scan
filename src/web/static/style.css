@@ -144,3 +144,71 @@ body {
 #progress-text {
   position: absolute; right: 8px; top: -18px; font-size: 11px; color: var(--text-dim);
 }
+
+/* ── Toast 通知 ─────────────────────────── */
+
+#toast-container {
+  position: fixed; top: 56px; right: 16px; z-index: 9999;
+  display: flex; flex-direction: column; gap: 8px;
+  max-width: 380px; pointer-events: none;
+}
+
+.toast {
+  display: flex; align-items: flex-start; gap: 8px;
+  background: var(--panel); color: var(--text);
+  padding: 12px 14px; border-radius: 6px; font-size: 13px;
+  border: 1px solid var(--border); pointer-events: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  transform: translateX(120%); opacity: 0;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.toast--visible { transform: translateX(0); opacity: 1; }
+
+.toast--error   { border-left: 3px solid var(--accent); }
+.toast--success { border-left: 3px solid #4caf50; }
+.toast--warning { border-left: 3px solid #ff9800; }
+.toast--info    { border-left: 3px solid #4a90d9; }
+
+.toast__close {
+  background: none; border: none; color: var(--text-dim);
+  cursor: pointer; font-size: 18px; line-height: 1;
+  padding: 0 4px; margin-left: auto; flex-shrink: 0;
+  transition: color 0.15s;
+}
+.toast__close:hover { color: var(--text); }
+
+#btn-clear-files { color: var(--text-dim); }
+
+/* ── 移动端响应式 ──────────────────────── */
+
+@media (max-width: 768px) {
+  body { overflow: auto; }
+
+  #app { height: auto; min-height: 100vh; }
+
+  #toolbar { padding: 8px 12px; }
+  #toolbar h1 { font-size: 16px; }
+  .phase-badge { display: none; }
+
+  #main-layout { flex-direction: column; }
+
+  #left-panel, #right-panel {
+    width: 100%; padding: 8px; gap: 8px;
+  }
+
+  #viewer-container {
+    height: 50vh; min-height: 300px;
+    border-left: none; border-right: none;
+  }
+
+  #viewer-controls { top: 8px; left: 8px; }
+  #viewer-controls .btn { padding: 6px 12px; font-size: 13px; }
+
+  #toast-container {
+    top: auto; bottom: 12px; right: 8px; left: 8px;
+    max-width: none;
+  }
+  .toast { transform: translateY(120%); }
+  .toast--visible { transform: translateY(0); }
+}

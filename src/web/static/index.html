@@ -32,6 +32,7 @@
         <div id="preview-strip"></div>
         <div id="upload-actions" style="display:none">
           <span id="file-count">0 张</span>
+          <button id="btn-clear-files" class="btn btn-sm" title="清除已选图片">清除</button>
           <button id="btn-upload" class="btn btn-primary">开始重建</button>
         </div>
       </section>
@@ -85,6 +86,9 @@
       </section>
     </aside>
   </div>
+
+  <!-- Toast 通知容器 -->
+  <div id="toast-container"></div>
 
   <!-- 进度条 -->
   <div id="progress-bar" style="display:none">

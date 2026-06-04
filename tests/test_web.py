@@ -28,6 +28,8 @@ async def test_index_html_content(client: AsyncClient) -> None:
     assert 'id="btn-download-all"' in html
     assert 'id="part-list"' in html
     assert 'id="progress-bar"' in html
+    assert 'id="toast-container"' in html
+    assert 'id="btn-clear-files"' in html
 
 
 @pytest.mark.asyncio
