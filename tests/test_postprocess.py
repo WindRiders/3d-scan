@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -197,3 +198,177 @@ def test_isotropic_remesh(sphere_mesh: Path, tmp_path: Path) -> None:
     # 重网格化后的网格应可加载
     mesh = trimesh.load(str(out), force="mesh")
     assert len(mesh.faces) > 0
+
+
+# === 覆盖率补充测试 ===
+
+
+def test_validate_mesh_invalid_file(tmp_path: Path) -> None:
+    """非 Trimesh 文件触发 ValueError（line 40）.
+
+    force="mesh" 会尽量转换，因此用 mock 模拟不可转换的类型。
+    """
+    p = tmp_path / "test.stl"
+    trimesh.creation.box(extents=[1, 1, 1]).export(str(p))
+    with patch("trimesh.load", return_value=trimesh.Scene()):
+        with pytest.raises(ValueError, match="不包含有效的三角形网格"):
+            validate_mesh(p)
+
+
+def test_validate_mesh_non_manifold(tmp_path: Path) -> None:
+    """非流形边检测：3 个面共享同一条边（lines 53, 58）."""
+    # 三个三角形共享边 (0,1)：面 0-1-2, 0-1-3, 0-1-4 → 边 (0,1) 被 3 面共享
+    verts = np.array(
+        [
+            [0, 0, 0], [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+            [0, -1, 0],
+        ],
+        dtype=np.float64,
+    )
+    faces = np.array([[0, 1, 2], [0, 1, 3], [0, 1, 4]], dtype=np.int32)
+    mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+    p = tmp_path / "non_manifold.ply"
+    mesh.export(str(p))
+    result = validate_mesh(p)
+    assert not result.is_manifold
+    assert result.non_manifold_edges > 0
+    assert any("非流形边" in i for i in result.issues)
+
+
+def test_validate_mesh_degenerate(tmp_path: Path) -> None:
+    """退化面检测（lines 58, 63-64）：含零面积面触发 volume 异常路径."""
+    # 三个共线顶点构成零面积面
+    verts = np.array(
+        [
+            [0, 0, 0], [1, 0, 0], [2, 0, 0],  # 共线 → 退化面
+            [1, 1, 0],  # 合法顶点
+        ],
+        dtype=np.float64,
+    )
+    faces = np.array(
+        [[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]], dtype=np.int32,
+    )
+    mesh = trimesh.Trimesh(vertices=verts, faces=faces, validate=False)
+    p = tmp_path / "degenerate.stl"
+    mesh.export(str(p))
+    result = validate_mesh(p)
+    assert result.degenerate_faces > 0
+    assert any("退化面" in i for i in result.issues)
+    # volume 异常被捕获 → volume = 0
+    assert result.volume_mm3 == 0.0 or "体积为零" in result.issues
+
+
+def test_wall_thickness_no_hit() -> None:
+    """射线无交点时返回 None（line 126）."""
+    box = trimesh.creation.box(extents=[1, 1, 1])
+    with patch.object(
+        box.ray, "intersects_location",
+        return_value=(np.empty(0), np.empty(0, dtype=np.int64), np.empty(0)),
+    ):
+        result = _estimate_min_wall_thickness(box)
+    assert result is None
+
+
+def test_fill_holes_mesh_trimesh_exception(tmp_path: Path) -> None:
+    """trimesh.fill_holes 失败时 Open3D 回退成功（lines 164-165, 171-172）."""
+    box = trimesh.creation.box(extents=[10, 10, 10])
+    src = tmp_path / "box.stl"
+    box.export(str(src))
+    out = tmp_path / "filled.stl"
+    with patch("trimesh.repair.fill_holes", side_effect=RuntimeError("fail")):
+        fill_holes_robust(src, out)
+    assert out.exists()
+    assert out.stat().st_size > 0
+
+
+def test_fill_holes_mesh_open3d_exception(
+    tmp_path: Path, holey_mesh: Path
+) -> None:
+    """两个填充方法都失败时触发警告（lines 174, 180）."""
+    out = tmp_path / "out.ply"
+    with patch("trimesh.repair.fill_holes", side_effect=RuntimeError("fail")):
+        with patch("src.postprocess._to_o3d", side_effect=RuntimeError("fail")):
+            fill_holes_robust(holey_mesh, out)
+    assert out.exists()
+
+
+def test_fill_holes_mesh_invalid(tmp_path: Path) -> None:
+    """非网格文件触发 fill_holes_robust 的 ValueError（line 154）."""
+    p = tmp_path / "test.stl"
+    trimesh.creation.box(extents=[1, 1, 1]).export(str(p))
+    with patch("trimesh.load", return_value=trimesh.Scene()):
+        with pytest.raises(ValueError, match="不是有效的网格文件"):
+            fill_holes_robust(p, tmp_path / "out.ply")
+
+
+def test_wall_thickness_report_thin_wall(tmp_path: Path) -> None:
+    """薄壁网格触发 FDM/SLA 风险区报告（lines 258-271）."""
+    thin = trimesh.creation.box(extents=[10, 10, 0.3])
+    src = tmp_path / "thin.stl"
+    thin.export(str(src))
+    report = wall_thickness_report(src)
+    assert report["min_wall_thickness_mm"] is not None
+    assert report["min_wall_thickness_mm"] < 1.2
+    assert report["fdm_printable"] is False
+    assert report["sla_printable"] is False
+    assert any(z["type"] == "壁厚不足" and z["severity"] == "high"
+               for z in report["risk_zones"])
+
+
+def test_validate_mesh_volume_exception(tmp_path: Path) -> None:
+    """volume 计算异常被捕获 → volume = 0（lines 63-64）."""
+    box = trimesh.creation.box(extents=[1, 1, 1])
+    p = tmp_path / "box.stl"
+    box.export(str(p))
+    with patch.object(
+        trimesh.Trimesh, "volume",
+        new_callable=lambda: property(lambda self: (_ for _ in ()).throw(RuntimeError("boom"))),
+    ):
+        result = validate_mesh(p)
+    assert result.volume_mm3 == 0.0
+    assert any("体积为零" in i for i in result.issues)
+
+
+def test_fill_holes_o3d_success(tmp_path: Path) -> None:
+    """Open3D fill_holes 成功路径覆盖（lines 171-172）."""
+    from unittest.mock import MagicMock
+
+    import open3d as o3d
+
+    box = trimesh.creation.box(extents=[10, 10, 10])
+    src = tmp_path / "box.stl"
+    box.export(str(src))
+    out = tmp_path / "filled.stl"
+
+    mock_o3d = MagicMock()
+    mock_o3d.fill_holes.return_value = mock_o3d
+    mock_o3d.vertices = o3d.utility.Vector3dVector(
+        box.vertices.astype(np.float64),
+    )
+    mock_o3d.triangles = o3d.utility.Vector3iVector(
+        box.faces.astype(np.int32),
+    )
+
+    with patch("src.postprocess._to_o3d", return_value=mock_o3d):
+        fill_holes_robust(src, out)
+    assert out.exists()
+
+
+def test_remove_floating_pieces_invalid(tmp_path: Path) -> None:
+    """非网格文件触发 remove_floating_pieces 的 ValueError（line 194）."""
+    p = tmp_path / "test.stl"
+    trimesh.creation.box(extents=[1, 1, 1]).export(str(p))
+    with patch("trimesh.load", return_value=trimesh.Scene()):
+        with pytest.raises(ValueError, match="不是有效的网格文件"):
+            remove_floating_pieces(p, tmp_path / "out.ply")
+
+
+def test_fix_normals_invalid(tmp_path: Path) -> None:
+    """非网格文件触发 fix_normals 的 ValueError（line 223）."""
+    p = tmp_path / "test.stl"
+    trimesh.creation.box(extents=[1, 1, 1]).export(str(p))
+    with patch("trimesh.load", return_value=trimesh.Scene()):
+        with pytest.raises(ValueError, match="不是有效的网格文件"):
+            fix_normals(p, tmp_path / "out.ply")

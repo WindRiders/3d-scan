@@ -39,6 +39,13 @@ def test_normalize_points() -> None:
     assert np.isclose(max_dist, 1.0)
 
 
+def test_normalize_points_zero_scale() -> None:
+    """所有点重合时，scale <= 1e-8 分支 —— 覆盖 line 23-24."""
+    pts = np.array([[5.0, 5.0, 5.0], [5.0, 5.0, 5.0]], dtype=np.float64)
+    normed = normalize_points(pts)
+    assert np.allclose(normed, 0, atol=1e-7)
+
+
 def test_estimate_point_count() -> None:
     """估算采样点数."""
     count = estimate_point_count(density_mm=1.0, bbox_diag_mm=100)
