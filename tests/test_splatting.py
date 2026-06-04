@@ -301,3 +301,110 @@ def test_run_gaussian_splatting_rgba(tmp_path: Path) -> None:
     cfg = ReconstructConfig(image_size=64, gaussian_splatting_iterations=20)
     result = run_gaussian_splatting_refinement(pc_path, [img_path], tmp_path, cfg)
     assert result.exists()
+
+
+# ===== _SplatRasterize backward 测试 =====
+
+
+def test_splat_rasterize_backward() -> None:
+    """反向传播梯度通过 _SplatRasterize.apply() 正常流动."""
+    from src.splatting_kernel import _SplatRasterize
+
+    N = 4
+    img_h, img_w = 64, 64
+
+    # means2D: 四个角附近，像素坐标
+    means2D = torch.tensor(
+        [[20.0, 20.0], [20.0, 44.0], [44.0, 20.0], [44.0, 44.0]],
+        requires_grad=True,
+    )
+
+    # cov2D: SPD 矩阵，L@L^T + eps*I
+    scale = 30.0
+    cov_list = [scale * torch.eye(2) for _ in range(N)]
+    cov2D = torch.stack(cov_list).requires_grad_(True)
+
+    # colors: 四色
+    colors = torch.tensor(
+        [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0, 0.0]],
+        requires_grad=True,
+    )
+
+    # opacities: [0, 1] 范围
+    opacities = torch.tensor([0.8, 0.6, 0.7, 0.5], requires_grad=True)
+
+    # z_depth: 递增
+    z_depth = torch.tensor([1.0, 2.0, 3.0, 4.0])
+
+    visible = torch.ones(N, dtype=torch.bool)
+
+    bg_color = torch.zeros(3)
+
+    rendered = _SplatRasterize.apply(
+        means2D, cov2D, colors, opacities, z_depth, visible,
+        img_h, img_w, bg_color, "cpu",
+    )
+
+    target = torch.rand(3, img_h, img_w)
+    loss = torch.nn.functional.mse_loss(rendered, target)
+    loss.backward()
+
+    # 所有四个 require_grad 张量的梯度不应为 None，且应有非零值
+    assert means2D.grad is not None, "means2D.grad is None"
+    assert means2D.grad.abs().sum() > 0, "means2D.grad is all zeros"
+
+    assert cov2D.grad is not None, "cov2D.grad is None"
+    assert cov2D.grad.abs().sum() > 0, "cov2D.grad is all zeros"
+
+    assert colors.grad is not None, "colors.grad is None"
+    assert colors.grad.abs().sum() > 0, "colors.grad is all zeros"
+
+    assert opacities.grad is not None, "opacities.grad is None"
+    assert opacities.grad.abs().sum() > 0, "opacities.grad is all zeros"
+
+
+def test_splat_rasterize_invisible_skipped() -> None:
+    """不可见高斯被跳过，渲染结果与完全移除该高斯一致."""
+    from src.splatting_kernel import _SplatRasterize
+
+    N = 4
+    img_h, img_w = 64, 64
+
+    # gaussian 0: 图像中心，覆盖范围大；其余三个在角落
+    means2D = torch.tensor(
+        [[32.0, 32.0], [16.0, 16.0], [16.0, 48.0], [48.0, 32.0]],
+        requires_grad=False,
+    )
+
+    cov_list = [
+        400.0 * torch.eye(2),   # gaussian 0: 覆盖整张图
+        20.0 * torch.eye(2),
+        20.0 * torch.eye(2),
+        20.0 * torch.eye(2),
+    ]
+    cov2D = torch.stack(cov_list)
+
+    colors = torch.tensor(
+        [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0, 0.0]],
+    )
+    opacities = torch.tensor([0.9, 0.6, 0.7, 0.5])
+    z_depth = torch.tensor([4.0, 1.0, 2.0, 3.0])  # gaussian 0 最近
+    bg_color = torch.zeros(3)
+
+    # 1. gaussian 0 不可见
+    visible_with_invis = torch.tensor([False, True, True, True])
+    out_invis = _SplatRasterize.apply(
+        means2D, cov2D, colors, opacities, z_depth, visible_with_invis,
+        img_h, img_w, bg_color, "cpu",
+    )
+
+    # 2. 完全移除 gaussian 0（只剩 3 个高斯）
+    out_without_g0 = _SplatRasterize.apply(
+        means2D[1:], cov2D[1:], colors[1:], opacities[1:], z_depth[1:],
+        torch.ones(3, dtype=torch.bool),
+        img_h, img_w, bg_color, "cpu",
+    )
+
+    assert torch.allclose(out_invis, out_without_g0, atol=1e-5), (
+        "visible[0]=False 应与完全移除 gaussian 0 的渲染结果一致"
+    )

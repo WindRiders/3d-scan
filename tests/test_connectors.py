@@ -159,3 +159,28 @@ def test_pin_placement_on_box(box_mesh: trimesh.Trimesh) -> None:
     assert pin.is_watertight
     # hole 应有内表面（非完全封闭的圆柱）
     assert hole.volume > 0
+
+
+def test_generate_magnet_slot_non_axis_aligned() -> None:
+    """磁铁槽: 法线不平行 Z，触发旋转分支."""
+    result = generate_magnet_slot(
+        position=np.array([0.0, 0.0, 5.0]),
+        face_normal=np.array([1.0, 0.0, 0.0]),  # X 轴，与 Z 不平行
+        diameter=6.1,
+        depth=3.0,
+    )
+    assert len(result.faces) > 0
+    assert result.is_watertight
+
+
+def test_generate_snap_fit_z_engagement() -> None:
+    """卡扣: 啮合方向靠近 Z，触发 up 回退分支."""
+    result = generate_snap_fit(
+        base_position=np.array([0.0, 0.0, 5.0]),
+        engagement_direction=np.array([0.0, 0.05, 1.0]),  # 接近 Z 轴
+        beam_width=4.0,
+        beam_length=8.0,
+        beam_thickness=1.5,
+        hook_height=2.0,
+    )
+    assert len(result.faces) > 0

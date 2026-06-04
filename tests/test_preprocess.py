@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import cv2
 import numpy as np
@@ -166,3 +168,22 @@ def test_preprocess_images_all_rejected(tmp_path: Path) -> None:
         assert False, "应抛出异常"
     except ValueError as e:
         assert "质量不合格" in str(e)
+
+
+def test_remove_background_with_named_model(tmp_path: Path) -> None:
+    """指定 model_name 时调用 new_session 路径."""
+    arr = np.random.randint(0, 256, (64, 64, 3), dtype=np.uint8)
+    img_path = tmp_path / "test.jpg"
+    Image.fromarray(arr).save(img_path)
+    out_path = tmp_path / "test_nobg.png"
+
+    fake_rembg = MagicMock()
+    fake_rembg.new_session.return_value = MagicMock()
+    fake_rembg.remove.return_value = Image.fromarray(arr).convert("RGBA")
+
+    with patch.dict("sys.modules", {"rembg": fake_rembg}):
+        result = remove_background(img_path, out_path, model_name="u2net")
+        fake_rembg.new_session.assert_called_once_with("u2net")
+        fake_rembg.remove.assert_called_once()
+        assert result == out_path
+        assert out_path.exists()

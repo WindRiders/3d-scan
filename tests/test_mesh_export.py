@@ -7,10 +7,12 @@ from pathlib import Path
 import numpy as np
 import open3d as o3d
 import pytest
+import trimesh
 
 from src.config import MeshConfig
 from src.mesh_export import (
     estimate_normals,
+    fill_holes,
     load_pointcloud,
     pointcloud_to_mesh,
     poisson_mesh,
@@ -102,3 +104,40 @@ def test_quick_preview(sphere_pcd_path: Path, tmp_path: Path) -> None:
     result = quick_preview_mesh(sphere_pcd_path, out, voxel_size=0.05)
     assert result.exists()
     assert result.stat().st_size > 0
+
+
+def test_load_pointcloud_ply(tmp_path: Path) -> None:
+    """加载 .ply 格式点云."""
+    pcd = o3d.geometry.PointCloud()
+    pts = np.random.randn(100, 3).astype(np.float64)
+    pcd.points = o3d.utility.Vector3dVector(pts)
+    ply_path = tmp_path / "points.ply"
+    o3d.io.write_point_cloud(str(ply_path), pcd)
+    loaded = load_pointcloud(ply_path)
+    assert len(loaded.points) == 100
+
+
+def test_simplify_mesh_already_small(tmp_path: Path) -> None:
+    """简化目标面数大于当前时直接返回原网格."""
+    verts = np.array(
+        [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0]], dtype=np.float64
+    )
+    faces = np.array([[0, 1, 2], [1, 3, 2]], dtype=np.int32)
+    mesh = o3d.geometry.TriangleMesh()
+    mesh.vertices = o3d.utility.Vector3dVector(verts)
+    mesh.triangles = o3d.utility.Vector3iVector(faces)
+    result = simplify_mesh(mesh, target_faces=100)
+    assert len(result.triangles) == 2
+
+
+def test_fill_holes_success() -> None:
+    """带孔洞的网格填充成功."""
+    # 四面体缺底面，留下三角形孔洞
+    verts = np.array(
+        [[0, 0, 0], [2, 0, 0], [0, 2, 0], [1, 1, 2]], dtype=np.float64
+    )
+    faces = np.array([[0, 1, 3], [1, 2, 3], [0, 3, 2]], dtype=np.int32)
+    mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+    assert not mesh.is_watertight
+    result = fill_holes(mesh, max_radius=5.0)
+    assert result.is_watertight
