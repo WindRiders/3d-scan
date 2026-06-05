@@ -204,11 +204,14 @@ async def process_task(tid: str, decompose_parts: int = 0, refine_3dgs: int = 0)
             if not isinstance(mesh, trimesh.Trimesh):
                 raise HTTPException(500, "网格加载失败")
             # 大网格先简化，避免拆解过慢
-            if len(mesh.faces) > 50_000:
+            if len(mesh.faces) > 10_000:
                 try:
-                    mesh = mesh.simplify_quadric_decimation(face_count=50_000)
+                    from fast_simplification import simplify
+
+                    verts, faces = simplify(mesh.vertices, mesh.faces, target_count=10_000)
+                    mesh = trimesh.Trimesh(vertices=verts, faces=faces)
                 except Exception:
-                    pass  # 简化失败不影响拆解，继续用原网格
+                    logger.warning("网格简化失败，使用原始网格（%d 面）", len(mesh.faces))
             decomp = decompose(mesh, method="convexity", num_parts=decompose_parts)
             part_dir = work_dir / "parts"
             part_paths = export_parts(decomp, part_dir, format="stl")
