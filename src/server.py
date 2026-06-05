@@ -205,7 +205,10 @@ async def process_task(tid: str, decompose_parts: int = 0, refine_3dgs: int = 0)
                 raise HTTPException(500, "网格加载失败")
             # 大网格先简化，避免拆解过慢
             if len(mesh.faces) > 50_000:
-                mesh = mesh.simplify_quadric_decimation(50_000)
+                try:
+                    mesh = mesh.simplify_quadric_decimation(face_count=50_000)
+                except Exception:
+                    pass  # 简化失败不影响拆解，继续用原网格
             decomp = decompose(mesh, method="convexity", num_parts=decompose_parts)
             part_dir = work_dir / "parts"
             part_paths = export_parts(decomp, part_dir, format="stl")
