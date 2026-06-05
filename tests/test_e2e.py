@@ -186,9 +186,9 @@ class TestEndToEnd:
         assert r.status_code == 200
         tid = r.json()["task_id"]
 
-        # 带拆解的处理
+        # 带拆解的处理（简化为 50K 面后再拆 2 个模块）
         r = httpx.post(
-            f"{server_url}/api/tasks/{tid}/process?decompose_parts=3",
+            f"{server_url}/api/tasks/{tid}/process?decompose_parts=2",
             timeout=600,
         )
         assert r.status_code == 200
