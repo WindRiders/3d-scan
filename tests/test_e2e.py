@@ -61,10 +61,10 @@ def _make_multi_view_images(work_dir: Path, num_views: int = 6) -> list[Path]:
 class TestEndToEnd:
     """端到端集成测试."""
 
-    @pytest.fixture(scope="class")
-    def server_url(self, tmp_path_factory):
+    @pytest.fixture(scope="function")
+    def server_url(self, tmp_path):
         """启动真实 Web 服务."""
-        work_dir = tmp_path_factory.mktemp("e2e")
+        work_dir = tmp_path
         port = 19876
 
         env = {
